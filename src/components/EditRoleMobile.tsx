@@ -23,8 +23,12 @@ const EditRoleMobile = () => {
         role: selectedRole,
         mobile,
       });
-      await update({ role: selectedRole });
-      router.push("/");
+      // Passing an object makes this a POST, which makes the server re-read the
+      // role from the database. The server ignores what we send, so the role
+      // cannot be chosen from the browser.
+      await update({});
+      // We are already on "/", so refresh to re-render it with the new role
+      router.refresh();
     } catch (error) {
       console.log(error);
     }
