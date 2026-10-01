@@ -6,7 +6,7 @@ import { IMessage } from "@/models/message.model";
 import { IUser } from "@/models/user.model";
 import { RootState } from "@/redux/store";
 import axios from "axios";
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, CheckCircle, Send } from "lucide-react";
 import mongoose from "mongoose";
 import { useParams, useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
@@ -81,10 +81,15 @@ const TrackOrder = () => {
           latitude: result.data.address.latitude,
           longitude: result.data.address.longitude,
         });
-        setDeliveryBoyLocation({
-          latitude: result.data.assignedDeliveryBoy.location.coordinates[1],
-          longitude: result.data.assignedDeliveryBoy.location.coordinates[0],
-        });
+        // No rider yet (the order is still pending), so there is no location
+        const riderCoordinates =
+          result.data.assignedDeliveryBoy?.location?.coordinates;
+        if (riderCoordinates) {
+          setDeliveryBoyLocation({
+            latitude: riderCoordinates[1],
+            longitude: riderCoordinates[0],
+          });
+        }
       } catch (error) {
         console.log(error);
       }
@@ -184,66 +189,81 @@ const TrackOrder = () => {
             <h2 className="text-xl font-bold">Track Order</h2>
             <p className="text-sm text-gray-600">
               order#{order?._id?.toString().slice(-6)}{" "}
-              <span className="text-green-700 font-semibold">
+              <span className="text-green-700 font-semibold capitalize">
                 {order?.status}
               </span>
             </p>
           </div>
         </div>
         <div className="px-4 mt-6">
-          <div className="rounded-3xl overflow-hidden border shadow">
-            <LiveMap
-              userLocation={userLocation}
-              deliveryBoyLocation={deliveryBoyLocation}
-            />
-          </div>
+          {order?.status === "delivered" ? (
+            <div className="bg-white rounded-3xl shadow-lg border p-8 text-center">
+              <CheckCircle className="mx-auto text-green-600 w-16 h-16" />
+              <h3 className="text-xl font-bold text-green-700 mt-4">
+                Delivered
+              </h3>
+              <p className="text-gray-600 mt-1">
+                Your order has been delivered. Thank you for shopping with
+                OmniMart!
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-3xl overflow-hidden border shadow">
+                <LiveMap
+                  userLocation={userLocation}
+                  deliveryBoyLocation={deliveryBoyLocation}
+                />
+              </div>
 
-          <div className="bg-white rounded-3xl shadow-lg border p-4 h-[430px] flex flex-col">
-            <div className="flex-1 overflow-y-auto p-2 space-y-3" ref={chatBoxRef}>
-              <AnimatePresence>
-                {messages?.map((msg, index) => (
-                  <motion.div
-                    key={msg._id?.toString()}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className={`flex ${msg.senderId == userData?._id ? "justify-end" : "justify-start"}`}
+              <div className="bg-white rounded-3xl shadow-lg border p-4 h-[430px] flex flex-col">
+                <div className="flex-1 overflow-y-auto p-2 space-y-3" ref={chatBoxRef}>
+                  <AnimatePresence>
+                    {messages?.map((msg, index) => (
+                      <motion.div
+                        key={msg._id?.toString()}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className={`flex ${msg.senderId == userData?._id ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={`px-4 py-2 max-w-[75%] rounded-2xl shadow
+        ${
+          msg.senderId === userData?._id
+            ? "bg-green-600 text-white rounded-br-none"
+            : "bg-gray-100 text-gray-800 rounded-bl-none"
+        }`}
+                        >
+                          <p>{msg.text}</p>
+                          <p className="text-[10px] opacity-70 mt-1 text-right">
+                            {msg.time}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+
+                <div className="flex gap-2 mt-3 border-t pt-3">
+                  <input
+                    type="text"
+                    placeholder="Type a Message..."
+                    className="flex-1 bg-gray-100 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-green-500"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                  />
+                  <button
+                    className="bg-green-600 hover:bg-green-700 p-3 rounded-xl text-white"
+                    onClick={sendMsg}
                   >
-                    <div
-                      className={`px-4 py-2 max-w-[75%] rounded-2xl shadow
-    ${
-      msg.senderId === userData?._id
-        ? "bg-green-600 text-white rounded-br-none"
-        : "bg-gray-100 text-gray-800 rounded-bl-none"
-    }`}
-                    >
-                      <p>{msg.text}</p>
-                      <p className="text-[10px] opacity-70 mt-1 text-right">
-                        {msg.time}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-
-            <div className="flex gap-2 mt-3 border-t pt-3">
-              <input
-                type="text"
-                placeholder="Type a Message..."
-                className="flex-1 bg-gray-100 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-green-500"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-              />
-              <button
-                className="bg-green-600 hover:bg-green-700 p-3 rounded-xl text-white"
-                onClick={sendMsg}
-              >
-                <Send size={24} />
-              </button>
-            </div>
-          </div>
+                    <Send size={24} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -16,6 +16,7 @@ import Image from "next/image";
 import axios from "axios";
 import mongoose from "mongoose";
 import { IUser } from "@/models/user.model";
+import { displayMobile } from "@/lib/mobile";
 
 interface IOrder {
   _id?: mongoose.Types.ObjectId;
@@ -130,7 +131,7 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
                     Assigned to : <span>{order.assignedDeliveryBoy.name}</span>
                   </p>
                   <p className="text-xs text-gray-600">
-                    📞 +92 {order.assignedDeliveryBoy.mobile}
+                    📞 {displayMobile(order.assignedDeliveryBoy.mobile)}
                   </p>
                 </div>
               </div>

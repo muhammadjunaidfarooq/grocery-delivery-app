@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { getSocket } from "@/lib/socket";
+import { displayMobile } from "@/lib/mobile";
 import mongoose from "mongoose";
 import { IUser } from "@/models/user.model";
 import { useRouter } from "next/navigation";
@@ -106,7 +107,7 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
             {order.isPaid ? "Paid" : "Unpaid"}
           </span>
           <span
-            className={`px-3 py-1 text-xs font-semibold border rounded-full ${getStatusColor(
+            className={`px-3 py-1 text-xs font-semibold border rounded-full capitalize ${getStatusColor(
               status,
             )}`}
           >
@@ -138,7 +139,7 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
                     Assigned to : <span>{order.assignedDeliveryBoy.name}</span>
                   </p>
                   <p className="text-xs text-gray-600">
-                    📞 +92 {order.assignedDeliveryBoy.mobile}
+                    📞 {displayMobile(order.assignedDeliveryBoy.mobile)}
                   </p>
                 </div>
               </div>
@@ -150,15 +151,18 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
                 Call
               </a>
             </div>
-            <button
-              className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold px-4 py-2 rounded-xl shadow hover:bg-green-700 transition"
-              onClick={() => {
-                if (!order._id) return;
-                router.push(`/user/track-order/${order._id.toString()}`);
-              }}
-            >
-              <Truck size={18} /> Track Your Order
-            </button>
+            {/* Nothing left to track once the order is delivered */}
+            {status !== "delivered" && (
+              <button
+                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white font-semibold px-4 py-2 rounded-xl shadow hover:bg-green-700 transition"
+                onClick={() => {
+                  if (!order._id) return;
+                  router.push(`/user/track-order/${order._id.toString()}`);
+                }}
+              >
+                <Truck size={18} /> Track Your Order
+              </button>
+            )}
           </>
         )}
 
