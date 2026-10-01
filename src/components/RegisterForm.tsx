@@ -30,23 +30,45 @@ const RegisterForm = ({ previousStep }: propType) => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage("");
 
     try {
-      const result = await axios.post("/api/auth/register", {
+      await axios.post("/api/auth/register", {
         name,
         email,
         password,
       });
+
+      // Sign the new user in straight away (no trip to /login)
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (!result || result.error) {
+        setErrorMessage(
+          "Your account was created, but automatic sign-in failed. Please try again.",
+        );
+        return;
+      }
+
+      // "/" shows the role and mobile form for a user who has not set them yet
       router.push("/");
-      setLoading(false);
-    } catch (error: any) {
+      router.refresh();
+    } catch (error) {
       console.error(error);
+      if (axios.isAxiosError(error) && error.response?.status === 400) {
+        setErrorMessage(error.response.data?.message || "Registration failed");
+      } else {
+        setErrorMessage("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -139,6 +161,12 @@ const RegisterForm = ({ previousStep }: propType) => {
             />
           )}
         </div>
+
+        {errorMessage && (
+          <p role="alert" className="text-red-600 text-sm text-center -mt-2">
+            {errorMessage}
+          </p>
+        )}
 
         {(() => {
           const isFormValid =
