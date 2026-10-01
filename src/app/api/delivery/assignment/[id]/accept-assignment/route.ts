@@ -1,3 +1,4 @@
+import emitEventHandler from "@/lib/emitEventHandler";
 import { requireAuth } from "@/lib/requireAuth";
 import connectDb from "@/lib/mongodb";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
@@ -94,6 +95,12 @@ export async function POST(
         $pull: { brodcastedTo: deliveryBoyId },
       },
     );
+
+    // Tell the customer's pages (My Orders, Track Order) to reload this order
+    await emitEventHandler("order-status-update", {
+      orderId: order._id,
+      status: order.status,
+    });
 
     return NextResponse.json(
       { message: "order accepted successfully" },

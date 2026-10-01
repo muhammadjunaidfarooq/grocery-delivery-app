@@ -91,6 +91,18 @@ const TrackOrder = () => {
     };
 
     getOrder();
+
+    // Reload this order when a rider accepts or delivers it
+    const socket = getSocket();
+    const onStatusUpdate = (data: { orderId: string }) => {
+      if (data.orderId?.toString() === String(orderId)) {
+        getOrder();
+      }
+    };
+    socket.on("order-status-update", onStatusUpdate);
+    return () => {
+      socket.off("order-status-update", onStatusUpdate);
+    };
   }, [userData?._id]);
 
   useEffect((): any => {

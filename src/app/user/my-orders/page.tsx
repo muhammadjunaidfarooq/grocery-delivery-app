@@ -1,6 +1,7 @@
 "use client";
 import UserOrderCard from "@/components/UserOrderCard";
 import axios from "axios";
+import { getSocket } from "@/lib/socket";
 import { ArrowLeft, Package, PackageSearch } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
@@ -58,6 +59,13 @@ function MyOrder() {
       }
     };
     getMyOrders();
+
+    // Reload the orders when a rider accepts or delivers one
+    const socket = getSocket();
+    socket.on("order-status-update", getMyOrders);
+    return () => {
+      socket.off("order-status-update", getMyOrders);
+    };
   }, []);
 
   if (loading) {

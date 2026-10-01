@@ -17,9 +17,22 @@ export async function POST(
     await connectDb();
     const { orderId } = await params;
     const { status } = await req.json();
+
+    // Admins can only move an order between these two. "delivered" is set by
+    // the assigned rider (mark-delivered), never from here.
+    if (!["pending", "out of delivery"].includes(status)) {
+      return NextResponse.json({ message: "invalid status" }, { status: 400 });
+    }
+
     const order = await Order.findById(orderId).populate("user");
     if (!order) {
       return NextResponse.json({ message: "order not found" }, { status: 400 });
+    }
+    if (order.status === "delivered") {
+      return NextResponse.json(
+        { message: "a delivered order cannot be changed" },
+        { status: 400 },
+      );
     }
 
     order.status = status;
@@ -75,7 +88,7 @@ export async function POST(
           await emitEventHandler(
             "new-assignment",
             deliveryAssignment,
-            boy.socket,
+            boy.socketId,
           );
         }
       }
