@@ -1,11 +1,19 @@
 import connectDb from "@/lib/mongodb";
+import { requireSessionOrSocketSecret } from "@/lib/socketAuth";
 import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = await requireSessionOrSocketSecret(req);
+    if ("error" in authResult) return authResult.error;
+
     await connectDb();
-    const { userId, location } = await req.json();
+    const body = await req.json();
+    const { location } = body;
+    // A logged-in user can only update their own location.
+    // The socket server (secret header) may name any user.
+    const userId = authResult.via === "session" ? authResult.user.id : body.userId;
     if (!userId || !location) {
       return NextResponse.json(
         { message: "missing userId or Location" },
