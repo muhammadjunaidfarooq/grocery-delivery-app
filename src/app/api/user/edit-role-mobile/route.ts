@@ -1,4 +1,5 @@
 import connectDb from "@/lib/mongodb";
+import { cleanMobile, formatMobile, isValidMobile } from "@/lib/mobile";
 import { requireAuth } from "@/lib/requireAuth";
 import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
@@ -13,6 +14,16 @@ export async function POST(req: NextRequest) {
 
     await connectDb();
     const { role, mobile } = await req.json();
+
+    // Same cleaning as the form: digits only, no leading 0. It must then be
+    // exactly 10 digits starting with 3, and is saved as "+92XXXXXXXXXX".
+    const cleanedMobile = cleanMobile(mobile);
+    if (!isValidMobile(cleanedMobile)) {
+      return NextResponse.json(
+        { message: "Mobile must be 10 digits starting with 3 (after +92)" },
+        { status: 400 },
+      );
+    }
 
     // "admin" can only be chosen by the very first admin (when no admin
     // exists yet), or by someone who is already an admin.
@@ -30,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const user = await User.findOneAndUpdate(
       { email: sessionUser.email },
-      { role, mobile },
+      { role, mobile: formatMobile(cleanedMobile) },
       { returnDocument: "after" }, // Fixes the Mongoose warning
     );
 

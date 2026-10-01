@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { cleanMobile, isValidMobile, MOBILE_PREFIX } from "@/lib/mobile";
 
 const EditRoleMobile = () => {
   const [roles, setRoles] = useState([
@@ -21,10 +22,14 @@ const EditRoleMobile = () => {
     try {
       const result = await axios.post("/api/user/edit-role-mobile", {
         role: selectedRole,
-        mobile,
+        mobile, // the 10 digits after +92; the server adds the prefix
       });
-      await update({ role: selectedRole });
-      router.push("/");
+      // Passing an object makes this a POST, which makes the server re-read the
+      // role from the database. The server ignores what we send, so the role
+      // cannot be chosen from the browser.
+      await update({});
+      // We are already on "/", so refresh to re-render it with the new role
+      router.refresh();
     } catch (error) {
       console.log(error);
     }
@@ -102,13 +107,25 @@ const EditRoleMobile = () => {
         <label htmlFor="mobile" className="text-gray-700 font-medium mb-2">
           Enter Your Mobile No.
         </label>
-        <input
-          type="tel"
-          id="mobile"
-          className="w-64 md:w-80 px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:outline-none text-gray-800 palceho"
-          placeholder="eg. 0000000000"
-          onChange={(e) => setMobile(e.target.value)}
-        />
+        <div className="flex w-64 md:w-80 rounded-xl border border-gray-300 focus-within:ring-2 focus-within:ring-green-500 overflow-hidden">
+          <span className="flex items-center px-4 bg-gray-100 text-gray-700 font-medium border-r border-gray-300">
+            {MOBILE_PREFIX}
+          </span>
+          <input
+            type="tel"
+            id="mobile"
+            inputMode="numeric"
+            className="flex-1 min-w-0 px-4 py-3 focus:outline-none text-gray-800"
+            placeholder="3001234567"
+            value={mobile}
+            onChange={(e) => setMobile(cleanMobile(e.target.value).slice(0, 10))}
+          />
+        </div>
+        {mobile.length > 0 && !isValidMobile(mobile) && (
+          <p className="text-red-600 text-sm mt-2">
+            Enter 10 digits starting with 3 (for example 3001234567)
+          </p>
+        )}
       </motion.div>
       <motion.button
         initial={{
@@ -122,9 +139,9 @@ const EditRoleMobile = () => {
         transition={{
           delay: 0.7,
         }}
-        disabled={mobile.length !== 10 || !selectedRole}
+        disabled={!isValidMobile(mobile) || !selectedRole}
         className={`inline-flex items-center gap-2 font-semibold py-3 px-8 rounded-2xl shadow-md transition-all duration-200 w-50 mt-20 ${
-          selectedRole && mobile.length === 10
+          selectedRole && isValidMobile(mobile)
             ? "bg-green-600 hover:bg-green-700 text-white cursor-pointer"
             : "bg-gray-300 text-gray-500 cursor-not-allowed"
         }`}

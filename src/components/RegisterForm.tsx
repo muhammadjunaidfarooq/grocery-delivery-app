@@ -20,33 +20,51 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
-type propType = {
-  previousStep: (s: number) => void;
-};
-
-const RegisterForm = ({ previousStep }: propType) => {
+const RegisterForm = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage("");
 
     try {
-      const result = await axios.post("/api/auth/register", {
+      await axios.post("/api/auth/register", {
         name,
         email,
         password,
       });
+
+      // Sign the new user in straight away (no trip to /login)
+      const result = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (!result || result.error) {
+        setErrorMessage(
+          "Your account was created, but automatic sign-in failed. Please try again.",
+        );
+        return;
+      }
+
+      // "/" shows the role and mobile form for a user who has not set them yet
       router.push("/");
-      setLoading(false);
-    } catch (error: any) {
+      router.refresh();
+    } catch (error) {
       console.error(error);
+      if (axios.isAxiosError(error) && error.response?.status === 400) {
+        setErrorMessage(error.response.data?.message || "Registration failed");
+      } else {
+        setErrorMessage("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -56,7 +74,7 @@ const RegisterForm = ({ previousStep }: propType) => {
     <div className="flex flex-col items-center justify-center min-h-screen px-6 py-10 bg-white relative">
       <div
         className="absolute top-6 left-6 flex items-center gap-2 text-green-700 hover:text-green-800 transition-colors cursor-pointer"
-        onClick={() => previousStep(1)}
+        onClick={() => router.push("/")}
       >
         <ArrowLeft className="w-5 h-5" />
         <span className="font-medium">Back</span>
@@ -139,6 +157,12 @@ const RegisterForm = ({ previousStep }: propType) => {
             />
           )}
         </div>
+
+        {errorMessage && (
+          <p role="alert" className="text-red-600 text-sm text-center -mt-2">
+            {errorMessage}
+          </p>
+        )}
 
         {(() => {
           const isFormValid =
