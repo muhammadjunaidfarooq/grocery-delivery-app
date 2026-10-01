@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 type props = {
   orderId: mongoose.Types.ObjectId;
-  deliveryBoyId: mongoose.Types.ObjectId;
+  deliveryBoyId: string | mongoose.Types.ObjectId;
 };
 function DeliveryChat({ orderId, deliveryBoyId }: props) {
   const [newMessage, setNewMessage] = useState("");
