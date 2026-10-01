@@ -15,6 +15,7 @@ interface ILocation {
 
 const DeliveryBoysDashboard = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
+  const [acceptError, setAcceptError] = useState("");
 
   const { userData } = useSelector((state: RootState) => state.user);
 
@@ -46,13 +47,20 @@ const DeliveryBoysDashboard = () => {
   }, []);
 
   const handleAccept = async (id: string) => {
+    setAcceptError("");
     try {
-      const result = await axios.get(
-        `/api/delivery/assignment/${id}/accept-assignment`,
-      );
-      // console.log(result);
+      await axios.post(`/api/delivery/assignment/${id}/accept-assignment`);
+      // Show the active delivery straight away (no page reload needed)
+      await fetchCurrentOrder();
     } catch (error) {
       console.log(error);
+      setAcceptError(
+        axios.isAxiosError(error) && error.response?.status === 409
+          ? "This job was already taken or you have an active delivery."
+          : "Could not accept the job. Try again.",
+      );
+      // The job may have been taken by another rider, so refresh the list
+      await fetchAssignments();
     }
   };
 
@@ -148,6 +156,12 @@ return ()=>socket.off("update-deliveryBoy-location")
         <h2 className="text-2xl font-bold mt-30 mb-7.5">
           Delivery Assignments
         </h2>
+
+        {acceptError && (
+          <p role="alert" className="text-red-600 text-sm -mt-4 mb-4">
+            {acceptError}
+          </p>
+        )}
 
         {assignments.map((a) => (
           <div
