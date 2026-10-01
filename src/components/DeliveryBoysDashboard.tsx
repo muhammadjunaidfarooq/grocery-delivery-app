@@ -15,7 +15,7 @@ interface ILocation {
 
 const DeliveryBoysDashboard = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
-  const [acceptError, setAcceptError] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const { userData } = useSelector((state: RootState) => state.user);
 
@@ -47,19 +47,32 @@ const DeliveryBoysDashboard = () => {
   }, []);
 
   const handleAccept = async (id: string) => {
-    setAcceptError("");
+    setActionError("");
     try {
       await axios.post(`/api/delivery/assignment/${id}/accept-assignment`);
       // Show the active delivery straight away (no page reload needed)
       await fetchCurrentOrder();
     } catch (error) {
       console.log(error);
-      setAcceptError(
+      setActionError(
         axios.isAxiosError(error) && error.response?.status === 409
           ? "This job was already taken or you have an active delivery."
           : "Could not accept the job. Try again.",
       );
       // The job may have been taken by another rider, so refresh the list
+      await fetchAssignments();
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    setActionError("");
+    try {
+      await axios.post(`/api/delivery/assignment/${id}/reject-assignment`);
+      // Remove it from this rider's list; other riders still see it
+      setAssignments((prev) => prev.filter((a) => a._id !== id));
+    } catch (error) {
+      console.log(error);
+      setActionError("Could not reject the job. Try again.");
       await fetchAssignments();
     }
   };
@@ -157,9 +170,9 @@ return ()=>socket.off("update-deliveryBoy-location")
           Delivery Assignments
         </h2>
 
-        {acceptError && (
+        {actionError && (
           <p role="alert" className="text-red-600 text-sm -mt-4 mb-4">
-            {acceptError}
+            {actionError}
           </p>
         )}
 
@@ -180,7 +193,10 @@ return ()=>socket.off("update-deliveryBoy-location")
               >
                 Accept
               </button>
-              <button className="flex-1 bg-red-600 text-white py-2 rounded-lg">
+              <button
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg"
+                onClick={() => handleReject(a._id)}
+              >
                 Reject
               </button>
             </div>
