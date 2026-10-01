@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document, Model } from "mongoose";
+import mongoose, { Schema, Model } from "mongoose";
+import { GROCERY_CATEGORIES, GROCERY_UNITS } from "@/lib/groceryOptions";
 
 // 1. Define the interface extending Mongoose Document
 export interface IGrocery {
@@ -8,6 +9,8 @@ export interface IGrocery {
   price: string;
   unit: string; // e.g., "kg", "dozen", "piece"
   image: string;
+  // Missing on older products: treat a missing value as "in stock"
+  inStock?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,18 +25,7 @@ const grocerySchema = new Schema<IGrocery>(
     },
     category: {
       type: String,
-      enum: [
-        "Fruits & Vegetables",
-        "Dairy & Eggs",
-        "Rice, Atta & Grains",
-        "Snacks & Biscuits",
-        "Spices & Masalas",
-        "Beverages & Drinks",
-        "Personal Care",
-        "Household Essentials",
-        "Instant & Packaged Food",
-        "Baby & Pet Care",
-      ],
+      enum: GROCERY_CATEGORIES,
       required: true,
     },
     price: {
@@ -44,11 +36,15 @@ const grocerySchema = new Schema<IGrocery>(
     unit: {
       type: String,
       required: true,
-      enum: ["kg", "g", "liter", "ml", "piece", "pack"],
+      enum: GROCERY_UNITS,
     },
     image: {
       type: String,
       required: true,
+    },
+    inStock: {
+      type: Boolean,
+      default: true,
     },
   },
   { timestamps: true }, // Handles createdAt and updatedAt automatically
