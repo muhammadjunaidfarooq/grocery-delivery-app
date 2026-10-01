@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/requireAuth";
 import uploadOnCloudinary from "@/lib/cloudinary";
 import connectDb from "@/lib/mongodb";
 import Grocery from "@/models/grocery.model";
@@ -6,16 +6,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDb();
-    const session = await auth();
+    // 1. Admin Check: only admins may add groceries
+    const authResult = await requireAuth(["admin"]);
+    if ("error" in authResult) return authResult.error;
 
-    // 1. Admin Check: If NOT admin, return error
-    if (session?.user?.role !== "admin") {
-      return NextResponse.json(
-        { message: "Unauthorized: Admin access required" },
-        { status: 403 },
-      ); 
-    }
+    await connectDb();
     // Read data that comes form api (/api/admin/add-grocery)
     const formData = await req.formData();
     const name = formData.get("name") as string;

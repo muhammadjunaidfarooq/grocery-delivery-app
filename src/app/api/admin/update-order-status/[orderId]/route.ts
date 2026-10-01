@@ -1,5 +1,6 @@
 import emitEventHandler from "@/lib/emitEventHandler";
 import connectDb from "@/lib/mongodb";
+import { requireAuth } from "@/lib/requireAuth";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import Order from "@/models/order.model";
 import User from "@/models/user.model";
@@ -7,9 +8,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { orderId: string } },
+  { params }: { params: Promise<{ orderId: string }> },
 ) {
   try {
+    const authResult = await requireAuth(["admin"]);
+    if ("error" in authResult) return authResult.error;
+
     await connectDb();
     const { orderId } = await params;
     const { status } = await req.json();
