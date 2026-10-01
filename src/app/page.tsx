@@ -8,7 +8,6 @@ import Nav from "@/components/Nav";
 import UserDashboard from "@/components/UserDashboard";
 import connectDb from "@/lib/mongodb";
 import User from "@/models/user.model";
-import { redirect } from "next/navigation";
 
 export default async function Home() {
   await connectDb();
@@ -18,8 +17,10 @@ export default async function Home() {
     return <LandingPage />;
   }
   const user = await User.findById(session?.user?.id);
+  // A leftover login cookie for a user that no longer exists is treated like
+  // a guest. (Redirecting to /login here made "/" unreachable for them.)
   if (!user) {
-    redirect("/login");
+    return <LandingPage />;
   }
   const inComplete =
     !user.mobile || !user.role || (!user.mobile && user.role == "user");
