@@ -6,7 +6,12 @@ export async function proxy(req: NextRequest) {
 
   const publicRoutes = ["/login", "/register", "/api/auth"];
 
-  if (publicRoutes.some((path) => pathname.startsWith(path))) {
+  // "/" is public for guests (the page itself shows a welcome page when there
+  // is no session). It must match exactly, because every path starts with "/".
+  if (
+    pathname === "/" ||
+    publicRoutes.some((path) => pathname.startsWith(path))
+  ) {
     return NextResponse.next();
   }
 

@@ -3,6 +3,7 @@ import AdminDashboard from "@/components/AdminDashboard";
 import DeliveryBoyDashboard from "@/components/DeliveryBoyDashboard";
 import EditRoleMobile from "@/components/EditRoleMobile";
 import GeoUpdater from "@/components/GeoUpdater";
+import LandingPage from "@/components/LandingPage";
 import Nav from "@/components/Nav";
 import UserDashboard from "@/components/UserDashboard";
 import connectDb from "@/lib/mongodb";
@@ -12,6 +13,10 @@ import { redirect } from "next/navigation";
 export default async function Home() {
   await connectDb();
   const session = await auth();
+  // Visitors who are not logged in see the public welcome page
+  if (!session?.user?.id) {
+    return <LandingPage />;
+  }
   const user = await User.findById(session?.user?.id);
   if (!user) {
     redirect("/login");
