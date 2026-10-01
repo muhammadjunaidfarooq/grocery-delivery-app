@@ -16,31 +16,41 @@ import Image from "next/image";
 import { useState } from "react";
 import googleImage from "@/assets/google_logo.png";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  const session = useSession();
-  console.log(session);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMessage("");
     try {
-      await signIn("credentials", {
+      // redirect:false makes signIn return a result instead of navigating,
+      // so we can check it and show an error on a wrong email or password.
+      const result = await signIn("credentials", {
         email,
         password,
+        redirect: false,
       });
+
+      if (!result || result.error) {
+        setErrorMessage("Invalid email or password");
+        setLoading(false);
+        return;
+      }
+
       router.push("/");
-      setLoading(false);
+      router.refresh();
     } catch (error) {
       console.log(error);
+      setErrorMessage("Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -87,7 +97,10 @@ const Login = () => {
             type="email"
             placeholder="Your Email"
             className="w-full border border-gray-300 rounded-xl py-3 pl-10 pr-4 text-gray-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setErrorMessage("");
+            }}
             value={email}
           />
         </div>
@@ -98,7 +111,10 @@ const Login = () => {
             type={showPassword ? "text" : "password"}
             placeholder="Your Password"
             className="w-full border border-gray-300 rounded-xl py-3 pl-10 pr-4 text-gray-800 focus:ring-2 focus:ring-green-500 focus:outline-none"
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setErrorMessage("");
+            }}
             value={password}
           />
           {showPassword ? (
@@ -113,6 +129,12 @@ const Login = () => {
             />
           )}
         </div>
+
+        {errorMessage && (
+          <p role="alert" className="text-red-600 text-sm text-center -mt-2">
+            {errorMessage}
+          </p>
+        )}
 
         {(() => {
           const isFormValid = email.includes("@") && password.length;

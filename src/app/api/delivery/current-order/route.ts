@@ -1,13 +1,15 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/requireAuth";
 import connectDb from "@/lib/mongodb";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    const authResult = await requireAuth(["deliveryBoy"]);
+    if ("error" in authResult) return authResult.error;
+    const deliveryBoyId = authResult.user.id;
+
     await connectDb();
-    const session = await auth();
-    const deliveryBoyId = session?.user?.id;
     const activeAssignment = await DeliveryAssignment.findOne({
       assignedTo: deliveryBoyId,
       status: "assigned",
