@@ -16,7 +16,7 @@ import Image from "next/image";
 import { useState } from "react";
 import googleImage from "@/assets/google_logo.png";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -24,9 +24,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const session = useSession();
-  console.log(session);
 
   const router = useRouter();
 
