@@ -16,6 +16,7 @@ import Image from "next/image";
 import axios from "axios";
 import mongoose from "mongoose";
 import { IUser } from "@/models/user.model";
+import { displayMobile } from "@/lib/mobile";
 
 interface IOrder {
   _id?: mongoose.Types.ObjectId;
@@ -130,7 +131,7 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
                     Assigned to : <span>{order.assignedDeliveryBoy.name}</span>
                   </p>
                   <p className="text-xs text-gray-600">
-                    📞 +92 {order.assignedDeliveryBoy.mobile}
+                    📞 {displayMobile(order.assignedDeliveryBoy.mobile)}
                   </p>
                 </div>
               </div>
@@ -156,19 +157,22 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
           >
             {status}
           </span>
-          <select
-            className="border border-gray-300 rounded-lg px-3 py-1 text-sm shadow-sm hover:border-green-400 transition focus:ring-2 focus:ring-green-500 outline-none"
-            value={status}
-            onChange={(e) =>
-              updateStatus(order._id?.toString()!, e.target.value)
-            }
-          >
-            {statusOptions.map((st) => (
-              <option key={st} value={st}>
-                {st.toUpperCase()}
-              </option>
-            ))}
-          </select>
+          {/* "delivered" is set by the rider, so admins only see it (read only) */}
+          {status !== "delivered" && (
+            <select
+              className="border border-gray-300 rounded-lg px-3 py-1 text-sm shadow-sm hover:border-green-400 transition focus:ring-2 focus:ring-green-500 outline-none"
+              value={status}
+              onChange={(e) =>
+                updateStatus(order._id?.toString()!, e.target.value)
+              }
+            >
+              {statusOptions.map((st) => (
+                <option key={st} value={st}>
+                  {st.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       <div className="border-t border-gray-200 mt-3 pt-3">

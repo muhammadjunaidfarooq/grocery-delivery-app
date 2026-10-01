@@ -15,6 +15,16 @@ export function isValidMobile(digits: string): boolean {
   return /^3\d{9}$/.test(digits);
 }
 
+/**
+ * For showing a saved number. New numbers are saved as "+923001234567" and
+ * shown as they are. Older numbers were saved without the prefix, so it is
+ * added for display.
+ */
+export function displayMobile(value?: string): string {
+  if (!value) return "";
+  return value.startsWith("+") ? value : `${MOBILE_PREFIX} ${value}`;
+}
+
 /** "3001234567" -> "+923001234567" */
 export function formatMobile(digits: string): string {
   return `${MOBILE_PREFIX}${digits}`;

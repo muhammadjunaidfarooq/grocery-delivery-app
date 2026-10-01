@@ -1,10 +1,12 @@
+import emitEventHandler from "@/lib/emitEventHandler";
 import { requireAuth } from "@/lib/requireAuth";
 import connectDb from "@/lib/mongodb";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import Order from "@/models/order.model";
+import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -15,44 +17,73 @@ export async function GET(
 
     await connectDb();
     const { id } = await params;
-
-    const assignment = await DeliveryAssignment.findById(id);
-    if (!assignment) {
+    if (!mongoose.isValidObjectId(id)) {
       return NextResponse.json(
-        { message: "assignment not found" },
-        { status: 400 },
-      );
-    }
-    if (assignment.status !== "brodcasted") {
-      return NextResponse.json(
-        { message: "assignment expired" },
+        { message: "invalid assignment id" },
         { status: 400 },
       );
     }
 
-    const alreadyAssigned = await DeliveryAssignment.findOne({
+    // A rider can only have one active delivery at a time
+    const activeJob = await DeliveryAssignment.findOne({
       assignedTo: deliveryBoyId,
-      status: { $nin: ["brodcasted", "completed"] },
+      status: "assigned",
     });
-
-    if (alreadyAssigned) {
+    if (activeJob) {
       return NextResponse.json(
         { message: "already assigned to other order" },
-        { status: 400 },
+        { status: 409 },
       );
     }
 
-    assignment.assignedTo = deliveryBoyId;
-    assignment.status = "assigned";
-    assignment.acceptedAt = new Date();
-    await assignment.save();
+    // One atomic update: it only matches while the job is still "brodcasted",
+    // nobody has it, and it was offered to this rider. If two riders accept at
+    // the same moment, MongoDB lets only one of them match.
+    const assignment = await DeliveryAssignment.findOneAndUpdate(
+      {
+        _id: id,
+        status: "brodcasted",
+        assignedTo: null,
+        brodcastedTo: deliveryBoyId,
+      },
+      {
+        $set: {
+          assignedTo: deliveryBoyId,
+          status: "assigned",
+          acceptedAt: new Date(),
+        },
+      },
+      { returnDocument: "after" },
+    );
 
-    const order = await Order.findById(assignment.order);
-    if (!order) {
-      return NextResponse.json({ message: "order not found" }, { status: 400 });
+    if (!assignment) {
+      const exists = await DeliveryAssignment.exists({ _id: id });
+      if (!exists) {
+        return NextResponse.json(
+          { message: "assignment not found" },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json(
+        { message: "assignment is no longer available" },
+        { status: 409 },
+      );
     }
-    order.assignedDeliveryBoy = deliveryBoyId;
-    await order.save();
+
+    const order = await Order.findByIdAndUpdate(assignment.order, {
+      assignedDeliveryBoy: deliveryBoyId,
+    });
+    if (!order) {
+      // Undo the claim so the job is not stuck on a missing order
+      await DeliveryAssignment.updateOne(
+        { _id: assignment._id },
+        {
+          $set: { status: "brodcasted" },
+          $unset: { assignedTo: "", acceptedAt: "" },
+        },
+      );
+      return NextResponse.json({ message: "order not found" }, { status: 404 });
+    }
 
     await DeliveryAssignment.updateMany(
       {
@@ -64,6 +95,12 @@ export async function GET(
         $pull: { brodcastedTo: deliveryBoyId },
       },
     );
+
+    // Tell the customer's pages (My Orders, Track Order) to reload this order
+    await emitEventHandler("order-status-update", {
+      orderId: order._id,
+      status: order.status,
+    });
 
     return NextResponse.json(
       { message: "order accepted successfully" },
