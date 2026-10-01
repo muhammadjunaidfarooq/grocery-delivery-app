@@ -16,6 +16,7 @@ interface ILocation {
 const DeliveryBoysDashboard = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [actionError, setActionError] = useState("");
+  const [delivering, setDelivering] = useState(false);
 
   const { userData } = useSelector((state: RootState) => state.user);
 
@@ -74,6 +75,26 @@ const DeliveryBoysDashboard = () => {
       console.log(error);
       setActionError("Could not reject the job. Try again.");
       await fetchAssignments();
+    }
+  };
+
+  const handleDelivered = async () => {
+    if (!activeOrder) return;
+    setActionError("");
+    setDelivering(true);
+    try {
+      // activeOrder is the assignment, so activeOrder._id is the assignment id
+      await axios.post(
+        `/api/delivery/assignment/${activeOrder._id}/mark-delivered`,
+      );
+      // The rider is free again: back to the list of new jobs
+      setActiveOrder(null);
+      await fetchAssignments();
+    } catch (error) {
+      console.log(error);
+      setActionError("Could not mark as delivered. Try again.");
+    } finally {
+      setDelivering(false);
     }
   };
 
@@ -158,6 +179,19 @@ return ()=>socket.off("update-deliveryBoy-location")
             orderId={activeOrder.order._id}
             deliveryBoyId={userData?._id!}
           />
+
+          {actionError && (
+            <p role="alert" className="text-red-600 text-sm mt-4">
+              {actionError}
+            </p>
+          )}
+          <button
+            className="w-full mt-4 mb-8 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow disabled:opacity-60"
+            onClick={handleDelivered}
+            disabled={delivering}
+          >
+            {delivering ? "Saving..." : "Mark as delivered"}
+          </button>
         </div>
       </div>
     );
