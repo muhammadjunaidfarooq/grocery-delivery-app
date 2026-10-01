@@ -20,11 +20,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
-type propType = {
-  previousStep: (s: number) => void;
-};
-
-const RegisterForm = ({ previousStep }: propType) => {
+const RegisterForm = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -78,7 +74,7 @@ const RegisterForm = ({ previousStep }: propType) => {
     <div className="flex flex-col items-center justify-center min-h-screen px-6 py-10 bg-white relative">
       <div
         className="absolute top-6 left-6 flex items-center gap-2 text-green-700 hover:text-green-800 transition-colors cursor-pointer"
-        onClick={() => previousStep(1)}
+        onClick={() => router.push("/")}
       >
         <ArrowLeft className="w-5 h-5" />
         <span className="font-medium">Back</span>

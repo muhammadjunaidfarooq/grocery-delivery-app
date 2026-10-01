@@ -2,12 +2,11 @@
 import React from "react";
 import { motion } from "motion/react";
 import { ArrowRight, Bike, ShoppingBasket } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-type propType = {
-  nextStep: (s: number) => void;
-};
-
-const Welcome = ({ nextStep }: propType) => {
+const Welcome = () => {
+  const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-center min-h-screen text-center p-6">
       <motion.div
@@ -82,11 +81,18 @@ const Welcome = ({ nextStep }: propType) => {
           delay: 0.8,
         }}
         className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-2xl shadow-md transition-all duration-200 mt-10 cursor-pointer"
-        onClick={() => nextStep(2)}
+        onClick={() => router.push("/register")}
       >
         <span>Next</span>
         <ArrowRight />
       </motion.button>
+
+      <p className="mt-6 text-sm text-gray-600">
+        Already have an account?{" "}
+        <Link href="/login" className="text-green-600 font-medium">
+          Login
+        </Link>
+      </p>
     </div>
   );
 };
