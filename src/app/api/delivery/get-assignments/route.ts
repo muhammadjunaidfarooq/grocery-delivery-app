@@ -1,14 +1,17 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/requireAuth";
 import connectDb from "@/lib/mongodb";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    const authResult = await requireAuth(["deliveryBoy"]);
+    if ("error" in authResult) return authResult.error;
+    const deliveryBoyId = authResult.user.id;
+
     await connectDb();
-    const session = await auth();
     const assignments = await DeliveryAssignment.find({
-      brodcastedTo: session?.user?.id,
+      brodcastedTo: deliveryBoyId,
       status: "brodcasted",
     }).populate("order");
     return NextResponse.json(assignments, { status: 200 });

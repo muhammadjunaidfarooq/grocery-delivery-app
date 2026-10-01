@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/requireAuth";
 import connectDb from "@/lib/mongodb";
 import DeliveryAssignment from "@/models/deliveryAssignment.model";
 import Order from "@/models/order.model";
@@ -9,13 +9,12 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
+    const authResult = await requireAuth(["deliveryBoy"]);
+    if ("error" in authResult) return authResult.error;
+    const deliveryBoyId = authResult.user.id;
+
     await connectDb();
     const { id } = await params;
-    const session = await auth();
-    const deliveryBoyId = session?.user?.id;
-    if (!deliveryBoyId) {
-      return NextResponse.json({ message: "unauthorize" }, { status: 400 });
-    }
 
     const assignment = await DeliveryAssignment.findById(id);
     if (!assignment) {
