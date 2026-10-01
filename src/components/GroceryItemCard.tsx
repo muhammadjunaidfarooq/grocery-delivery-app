@@ -15,6 +15,8 @@ interface IGrocery {
   price: string;
   unit: string;
   image: string;
+  // Missing on older products: treat a missing value as in stock
+  inStock?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +25,7 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { cartData } = useSelector((state: RootState) => state.cart);
   const cartItem = cartData.find((i) => i._id == item._id);
+  const outOfStock = item.inStock === false;
   return (
     <motion.div
       initial={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -37,8 +40,15 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
           fill
           alt={item.name}
           sizes="(max-width: 768px) 100vw, 25vw"
-          className="object-contain p-4 transition-transform duration-500 group-hover:scale-105"
+          className={`object-contain p-4 transition-transform duration-500 group-hover:scale-105 ${
+            outOfStock ? "opacity-50 grayscale" : ""
+          }`}
         />
+        {outOfStock && (
+          <span className="absolute top-3 left-3 bg-gray-800 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
+            Out of stock
+          </span>
+        )}
         <div className="absolute inset-0 bg-linear-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300" />
       </div>
 
@@ -55,7 +65,14 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
             Rs.{item.price}
           </span>
         </div>
-        {!cartItem ? (
+        {outOfStock ? (
+          <button
+            disabled
+            className="mt-4 flex items-center justify-center gap-2 bg-gray-200 text-gray-500 rounded-full py-2 text-sm font-medium cursor-not-allowed"
+          >
+            Currently unavailable
+          </button>
+        ) : !cartItem ? (
           <motion.button
             className="mt-4 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-full py-2 text-sm font-medium transition-all"
             whileTap={{ scale: 0.96 }}

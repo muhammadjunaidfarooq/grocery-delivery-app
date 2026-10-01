@@ -1,6 +1,13 @@
-import { requireAuth } from "@/lib/requireAuth";
 import uploadOnCloudinary from "@/lib/cloudinary";
+import {
+  checkCategory,
+  checkImage,
+  checkName,
+  checkPrice,
+  checkUnit,
+} from "@/lib/groceryOptions";
 import connectDb from "@/lib/mongodb";
+import { requireAuth } from "@/lib/requireAuth";
 import Grocery from "@/models/grocery.model";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,25 +18,27 @@ export async function POST(req: NextRequest) {
     if ("error" in authResult) return authResult.error;
 
     await connectDb();
-    // Read data that comes form api (/api/admin/add-grocery)
-    const formData = await req.formData();
-    const name = formData.get("name") as string;
-    const category = formData.get("category") as string;
-    const unit = formData.get("unit") as string;
-    const price = formData.get("price") as string;
-    const file = formData.get("image") as Blob | null;
 
-    // 2. Handle Image Upload strictly
-    if (!file) {
-      return NextResponse.json(
-        { message: "Image is required" },
-        { status: 400 },
-      );
+    // Read data that comes from the form (/api/admin/add-grocery)
+    const formData = await req.formData();
+
+    // 2. Validate every field on the server (never trust the browser)
+    const name = checkName(formData.get("name"));
+    const category = checkCategory(formData.get("category"));
+    const unit = checkUnit(formData.get("unit"));
+    const price = checkPrice(formData.get("price"));
+    const file = checkImage(formData.get("image"));
+    for (const check of [name, category, unit, price, file]) {
+      if (!check.ok) {
+        return NextResponse.json({ message: check.message }, { status: 400 });
+      }
+    }
+    if (!name.ok || !category.ok || !unit.ok || !price.ok || !file.ok) {
+      return NextResponse.json({ message: "Invalid input" }, { status: 400 });
     }
 
-    const imageUrl = await uploadOnCloudinary(file);
-
-    // 3. Ensure imageUrl is not null before DB Save
+    // 3. Upload the image, and make sure we got a URL before saving
+    const imageUrl = await uploadOnCloudinary(file.value);
     if (!imageUrl) {
       return NextResponse.json(
         { message: "Image upload failed" },
@@ -38,10 +47,10 @@ export async function POST(req: NextRequest) {
     }
 
     const grocery = await Grocery.create({
-      name,
-      category,
-      price,
-      unit,
+      name: name.value,
+      category: category.value,
+      price: price.value,
+      unit: unit.value,
       image: imageUrl,
     });
 
