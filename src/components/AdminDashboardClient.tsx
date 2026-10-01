@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { DashboardRange } from "@/lib/dateRange";
 import type { DashboardData } from "@/lib/dashboardTypes";
+import AdminCharts, { ChartsSkeleton } from "./AdminCharts";
 
 const RANGES: { id: DashboardRange; label: string }[] = [
   { id: "all", label: "All" },
@@ -201,6 +202,11 @@ function AdminDashboardClient() {
               </motion.div>
             ))}
       </div>
+
+      {loading && !data && <ChartsSkeleton />}
+      {data && data.stats.orders > 0 && (
+        <AdminCharts data={data} loading={loading} />
+      )}
 
       {data && !loading && !error && data.stats.orders === 0 && (
         <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-8 text-center text-gray-500 mb-8">
