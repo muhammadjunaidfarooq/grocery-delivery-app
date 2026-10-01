@@ -81,16 +81,16 @@ const Welcome = () => {
           delay: 0.8,
         }}
         className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-8 rounded-2xl shadow-md transition-all duration-200 mt-10 cursor-pointer"
-        onClick={() => router.push("/register")}
+        onClick={() => router.push("/login")}
       >
-        <span>Next</span>
+        <span>Login</span>
         <ArrowRight />
       </motion.button>
 
       <p className="mt-6 text-sm text-gray-600">
-        Already have an account?{" "}
-        <Link href="/login" className="text-green-600 font-medium">
-          Login
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="text-green-600 font-medium">
+          Register
         </Link>
       </p>
     </div>
