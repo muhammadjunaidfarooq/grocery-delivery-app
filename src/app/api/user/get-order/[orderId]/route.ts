@@ -2,6 +2,7 @@ import connectDb from "@/lib/mongodb";
 import { canAccessOrder } from "@/lib/orderAccess";
 import { requireAuth } from "@/lib/requireAuth";
 import Order from "@/models/order.model";
+import mongoose from "mongoose";
 import { NextResponse } from "next/server";
 export async function GET(
   request: Request,
@@ -15,9 +16,13 @@ export async function GET(
 
     const { orderId } = await params; // ✅ FIX
 
-    console.log("OrderId:", orderId);
+    if (!mongoose.isValidObjectId(orderId)) {
+      return NextResponse.json({ message: "Order not found" }, { status: 404 });
+    }
 
-    const order = await Order.findById(orderId).populate("assignedDeliveryBoy");
+    const order = await Order.findById(orderId)
+      .select("-paymentConfirmationNote -paymentReceivedBy")
+      .populate("assignedDeliveryBoy", "name mobile location");
 
     if (!order) {
       return NextResponse.json({ message: "Order not found" }, { status: 404 });

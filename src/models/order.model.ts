@@ -1,4 +1,9 @@
 import mongoose from "mongoose";
+import {
+  MAX_PAYMENT_NOTE_LENGTH,
+  PAYMENT_CONFIRMATION_METHODS,
+  type PaymentConfirmationMethod,
+} from "@/lib/payment";
 
 export interface IOrder {
   _id?: mongoose.Types.ObjectId;
@@ -11,7 +16,14 @@ export interface IOrder {
     image: string;
     quantity: number;
   }[];
+  // Payment status: false = pending, true = paid
   isPaid: boolean;
+  // How and by whom the payment was confirmed (empty while unpaid)
+  paidAt?: Date | null;
+  paymentConfirmationMethod?: PaymentConfirmationMethod | null;
+  paymentReceivedBy?: mongoose.Types.ObjectId | null;
+  paymentReceivedByRole?: "deliveryBoy" | "admin" | null;
+  paymentConfirmationNote?: string;
   totalAmount: {
     type: number;
   };
@@ -58,6 +70,32 @@ const orderSchema = new mongoose.Schema<IOrder>(
       type: Boolean,
       default: false,
     },
+    // Payment confirmation audit (all optional, so older orders stay valid)
+    paidAt: {
+      type: Date,
+      default: null,
+    },
+    paymentConfirmationMethod: {
+      type: String,
+      enum: [...PAYMENT_CONFIRMATION_METHODS, null],
+      default: null,
+    },
+    paymentReceivedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    paymentReceivedByRole: {
+      type: String,
+      enum: ["deliveryBoy", "admin", null],
+      default: null,
+    },
+    // Admin's reason for a manual confirmation. Internal: never sent to customers.
+    paymentConfirmationNote: {
+      type: String,
+      trim: true,
+      maxlength: MAX_PAYMENT_NOTE_LENGTH,
+    },
     totalAmount: {
       type: Number,
     },
@@ -93,6 +131,13 @@ const orderSchema = new mongoose.Schema<IOrder>(
   },
   { timestamps: true },
 );
+
+// In `next dev`, the old compiled model survives hot reloads. If it was built
+// from an older version of this schema (for example before the payment
+// fields were added), rebuild it so new fields are saved and can be populated.
+if (mongoose.models.Order && !mongoose.models.Order.schema.path("paymentReceivedBy")) {
+  mongoose.deleteModel("Order");
+}
 
 const Order = mongoose.models.Order || mongoose.model("Order", orderSchema);
 export default Order;

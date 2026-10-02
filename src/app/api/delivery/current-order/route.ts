@@ -16,7 +16,8 @@ export async function GET() {
     })
       .populate({
         path: "order",
-        populate: { path: "address" },
+        // Internal admin payment details are not needed by the rider
+        select: "-paymentConfirmationNote -paymentReceivedBy",
       })
       .lean();
     if (!activeAssignment) {

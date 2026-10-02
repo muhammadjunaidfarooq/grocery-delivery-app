@@ -11,9 +11,12 @@ export async function GET(req: NextRequest) {
     await connectDb();
     const orders = await Order.find({})
       .populate("user assignedDeliveryBoy")
+      // strictPopulate:false: never fail the whole list because of this optional field
+      .populate({ path: "paymentReceivedBy", select: "name role", strictPopulate: false })
       .sort({ createdAt: -1 });
     return NextResponse.json(orders, { status: 200 });
   } catch (error) {
+    console.error("get-orders error:", error);
     return NextResponse.json(
       { message: `get orders error: ${error}` },
       { status: 500 },

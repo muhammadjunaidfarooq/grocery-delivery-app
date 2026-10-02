@@ -13,7 +13,7 @@ export async function GET() {
     const assignments = await DeliveryAssignment.find({
       brodcastedTo: deliveryBoyId,
       status: "brodcasted",
-    }).populate("order");
+    }).populate("order", "-paymentConfirmationNote -paymentReceivedBy");
     return NextResponse.json(assignments, { status: 200 });
   } catch (error) {
     return NextResponse.json(
