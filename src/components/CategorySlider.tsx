@@ -14,9 +14,10 @@ import {
   Wheat,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 
-const CategorySlider = () => {
+const CategorySlider = ({ active }: { active?: string }) => {
   const categories = [
     { id: 1, name: "Fruits & Vegetables", icon: Apple, color: "bg-green-100" },
     { id: 2, name: "Dairy & Eggs", icon: Milk, color: "bg-yellow-100" },
@@ -108,8 +109,18 @@ const CategorySlider = () => {
               whileHover={{ y: -5 }}
               className="min-w-35 md:min-w-45 shrink-0"
             >
-              <div
-                className={`group/card flex flex-col items-center justify-center rounded-3xl ${cat.color} p-6 h-full transition-all duration-300 hover:shadow-lg border border-transparent hover:border-green-200 cursor-pointer`}
+              <Link
+                href={
+                  active === cat.name
+                    ? "/#products"
+                    : `/?category=${encodeURIComponent(cat.name)}#products`
+                }
+                aria-pressed={active === cat.name}
+                className={`group/card flex flex-col items-center justify-center rounded-3xl ${cat.color} p-6 h-full transition-all duration-300 hover:shadow-lg border-2 cursor-pointer ${
+                  active === cat.name
+                    ? "border-green-600 shadow-lg"
+                    : "border-transparent hover:border-green-200"
+                }`}
               >
                 <div className="bg-white p-4 rounded-2xl shadow-sm mb-4 group-hover/card:scale-110 transition-transform duration-300">
                   <Icon className="w-8 h-8 text-green-700" />
@@ -117,7 +128,7 @@ const CategorySlider = () => {
                 <p className="text-center text-sm md:text-base font-bold text-gray-800 group-hover/card:text-green-800">
                   {cat.name}
                 </p>
-              </div>
+              </Link>
             </motion.div>
           );
         })}

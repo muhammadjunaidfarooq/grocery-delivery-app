@@ -1,13 +1,6 @@
 import mongoose from "mongoose";
 
-const mongodbUrl = process.env.MONGODB_URL;
-
-if (!mongodbUrl) {
-  throw new Error(
-    "Please define the MONGODB_URL environment variable inside .env.local",
-  );
-}
-
+// Reuse one connection across hot reloads (dev) and requests (serverless)
 let cached = global.mongoose;
 if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
@@ -17,16 +10,27 @@ const connectDb = async () => {
   if (cached.conn) {
     return cached.conn;
   }
+  // Checked here (not at import time) so `next build` works without a database
+  const mongodbUrl = process.env.MONGODB_URL;
+  if (!mongodbUrl) {
+    throw new Error(
+      "MONGODB_URL is not set. Add it to .env.local (local) or the Vercel project settings (production).",
+    );
+  }
   if (!cached.promise) {
     cached.promise = mongoose
-      .connect(mongodbUrl)
+      .connect(mongodbUrl, { serverSelectionTimeoutMS: 10000 })
       .then((conn) => conn.connection);
   }
   try {
-    const conn = await cached.promise;
-    return conn;
+    cached.conn = await cached.promise;
+    return cached.conn;
   } catch (error) {
-    console.log(error);
+    // Forget the failed attempt so the next request tries again,
+    // and let the route return a proper error instead of hanging.
+    cached.promise = null;
+    console.error("MongoDB connection error:", error);
+    throw error;
   }
 };
 

@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import connectDb from "@/lib/mongodb";
 import User from "@/models/user.model";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -8,9 +9,10 @@ export async function GET(req: NextRequest) {
     if (!session || !session.user) {
       return NextResponse.json(
         { message: "User is not authenticated" },
-        { status: 400 },
+        { status: 401 },
       );
     }
+    await connectDb();
     const user = await User.findOne({ email: session.user.email }).select(
       "-password",
     );

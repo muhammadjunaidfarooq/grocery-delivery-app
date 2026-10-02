@@ -15,7 +15,16 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  // On HTTPS (production, e.g. Vercel) Auth.js names the cookie
+  // "__Secure-authjs.session-token", so getToken must be told to read that one.
+  const secureCookie =
+    req.nextUrl.protocol === "https:" ||
+    req.headers.get("x-forwarded-proto") === "https";
+  const token = await getToken({
+    req,
+    secret: process.env.AUTH_SECRET,
+    secureCookie,
+  });
 
   if (!token) {
     const loginUrl = new URL("/login", req.url);
@@ -39,5 +48,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   // This Regex tells Middleware: "Do NOT run on static files, images, or Next.js internals"
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // and not on public files such as /products/apples.png (any path with a file extension)
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\.[a-zA-Z0-9]+$).*)"],
 };

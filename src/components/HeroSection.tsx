@@ -48,7 +48,7 @@ const HeroSection = () => {
   }, []);
 
   return (
-    <div className="relative w-[98%] mx-auto mt-32 h-[80vh] rounded-3xl overflow-hidden shadow-2xl">
+    <div className="relative w-[98%] mx-auto mt-32 h-[60vh] sm:h-[70vh] rounded-3xl overflow-hidden shadow-2xl">
       <AnimatePresence mode="wait">
         <motion.div
           key={current}
@@ -97,6 +97,11 @@ const HeroSection = () => {
             whileHover={{ scale: 1.09 }}
             whileTap={{ scale: 0.96 }}
             transition={{ duration: 0.2 }}
+            onClick={() =>
+              document
+                .getElementById("products")
+                ?.scrollIntoView({ behavior: "smooth" })
+            }
             className="mt-4 bg-white text-green-700 hover:bg-green-100      px-8 py-3 rounded-full shadow-lg transition-all duration-300 flex items-center gap-2 font-bold cursor-pointer"
           >
             <ShoppingBasket className="w-5 h-5" />

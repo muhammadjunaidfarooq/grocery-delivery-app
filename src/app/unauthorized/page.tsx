@@ -19,7 +19,7 @@ const Unauthorized = () => {
             Access Denied
           </h1>
           <p className="text-gray-500 text-lg">
-            Sorry, you don't have the required permissions to view this page.
+            Sorry, you don&apos;t have the required permissions to view this page.
           </p>
         </div>
 
