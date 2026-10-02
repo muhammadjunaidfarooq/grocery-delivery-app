@@ -9,7 +9,12 @@ import Welcome from "@/components/Welcome";
 import connectDb from "@/lib/mongodb";
 import User from "@/models/user.model";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; category?: string }>;
+}) {
+  const { q, category } = await searchParams;
   await connectDb();
   const session = await auth();
   // Visitors who are not logged in see the public welcome page
@@ -37,7 +42,7 @@ export default async function Home() {
       <GeoUpdater userId={plainUser._id} />
 
       {user.role == "user" ? (
-        <UserDashboard />
+        <UserDashboard search={q} category={category} />
       ) : user.role == "admin" ? (
         <AdminDashboard />
       ) : (

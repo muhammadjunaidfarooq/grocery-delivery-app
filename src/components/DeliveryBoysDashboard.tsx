@@ -5,8 +5,19 @@ import { RootState } from "@/redux/store";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
-import LiveMap from "./LiveMap";
+import dynamic from "next/dynamic";
+
+// Leaflet needs `window`, so the map is loaded in the browser only
+const LiveMap = dynamic(() => import("@/components/LiveMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-125 rounded-xl bg-gray-100 animate-pulse" />
+  ),
+});
 import DeliveryChat from "./DeliveryChat";
+import ConfirmCashModal from "./ConfirmCashModal";
+import { Banknote, CheckCircle, CreditCard } from "lucide-react";
+import { PAYMENT_METHOD_LABELS, ROLE_LABELS, formatMoney, formatPaidAt } from "@/lib/payment";
 
 interface ILocation {
   latitude: number;
@@ -25,10 +36,13 @@ const DeliveryBoysDashboard = () => {
     latitude: 0,
     longitude: 0,
   });
-  const [deliveryBoyLocation, setDeliveryBoyLocation] = useState<ILocation>({
-    latitude: 0,
-    longitude: 0,
-  });
+  // null until the browser gives us the rider's position
+  const [deliveryBoyLocation, setDeliveryBoyLocation] =
+    useState<ILocation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [cashSaving, setCashSaving] = useState(false);
+  const [cashError, setCashError] = useState("");
 
   const fetchAssignments = async () => {
     try {
@@ -42,7 +56,11 @@ const DeliveryBoysDashboard = () => {
   useEffect((): any => {
     const socket = getSocket();
     socket.on("new-assignment", (deliveryAssignment) => {
-      setAssignments((prev) => [...prev, deliveryAssignment]);
+      setAssignments((prev) =>
+        prev.some((a) => a._id === deliveryAssignment._id)
+          ? prev
+          : [...prev, deliveryAssignment],
+      );
     });
     return () => socket.off("new-assignment");
   }, []);
@@ -98,6 +116,36 @@ const DeliveryBoysDashboard = () => {
     }
   };
 
+  // Rider confirms the COD cash. The server decides everything (amount,
+  // method, time); the browser only says "this job".
+  const handleCashReceived = async () => {
+    if (!activeOrder) return;
+    setCashSaving(true);
+    setCashError("");
+    try {
+      const result = await axios.post(
+        `/api/delivery/assignment/${activeOrder._id}/cash-received`,
+      );
+      setActiveOrder((prev: any) =>
+        prev ? { ...prev, order: { ...prev.order, ...result.data } } : prev,
+      );
+      setCashModalOpen(false);
+    } catch (error) {
+      console.error(error);
+      const message =
+        axios.isAxiosError(error) && error.response?.data?.message
+          ? error.response.data.message
+          : "Could not confirm the payment. Check your connection and try again.";
+      setCashError(message);
+      // Paid already (for example by the admin): close and show the new state
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        await fetchCurrentOrder();
+      }
+    } finally {
+      setCashSaving(false);
+    }
+  };
+
   const fetchCurrentOrder = async () => {
     try {
       const result = await axios.get("/api/delivery/current-order");
@@ -142,21 +190,28 @@ const DeliveryBoysDashboard = () => {
     return () => navigator.geolocation.clearWatch(watcher);
   }, [userData?._id]);
 
-  useEffect(():any=>{
-const socket=getSocket()
-socket.on("update-deliveryBoy-location",({userId,location})=>{
-  setDeliveryBoyLocation({
-    latitude:location.coordinates[1],
-    longitude:location.coordinates[0]
-  })
-})
-return ()=>socket.off("update-deliveryBoy-location")
-},[])
+
+
+  // Payment or status changed elsewhere (e.g. admin confirmed a transfer)
+  const activeOrderId = activeOrder?.order?._id;
+  useEffect(() => {
+    if (!activeOrderId) return;
+    const socket = getSocket();
+    const onOrderUpdate = (data: { orderId: string }) => {
+      if (String(data.orderId) === String(activeOrderId)) fetchCurrentOrder();
+    };
+    socket.on("order-status-update", onOrderUpdate);
+    return () => {
+      socket.off("order-status-update", onOrderUpdate);
+    };
+  }, [activeOrderId]);
 
   useEffect(() => {
-    fetchCurrentOrder();
-    fetchAssignments();
-  }, [userData]);
+    if (!userData?._id) return;
+    Promise.all([fetchCurrentOrder(), fetchAssignments()]).finally(() =>
+      setLoading(false),
+    );
+  }, [userData?._id]);
 
   if (activeOrder && userLocation) {
     return (
@@ -174,15 +229,107 @@ return ()=>socket.off("update-deliveryBoy-location")
               userLocation={userLocation}
               deliveryBoyLocation={deliveryBoyLocation}
             />
+            {!deliveryBoyLocation && (
+              <p className="text-xs text-gray-500 p-2">
+                Allow location access so the customer can follow you live.
+              </p>
+            )}
           </div>
           <DeliveryChat
             orderId={activeOrder.order._id}
             deliveryBoyId={userData?._id!}
           />
 
+          {/* Payment */}
+          <div className="bg-white rounded-2xl shadow border p-5 mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs text-gray-500">Payment Method</p>
+                <p className="font-semibold text-gray-800 flex items-center gap-2">
+                  {activeOrder.order.paymentMethod === "cod" ? (
+                    <>
+                      <Banknote size={18} className="text-green-600" /> Cash on Delivery
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard size={18} className="text-green-600" /> Paid Online
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Payment Status</p>
+                <span
+                  className={`inline-block text-xs font-semibold px-3 py-1 rounded-full border ${
+                    activeOrder.order.isPaid
+                      ? "bg-green-100 text-green-700 border-green-300"
+                      : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                  }`}
+                >
+                  {activeOrder.order.isPaid ? "Paid" : "Pending"}
+                </span>
+              </div>
+            </div>
+
+            {activeOrder.order.paymentMethod === "cod" && !activeOrder.order.isPaid && (
+              <>
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                  <p className="text-sm text-gray-600">Amount to Collect</p>
+                  <p className="text-3xl font-extrabold text-green-700">
+                    {formatMoney(activeOrder.order.totalAmount)}
+                  </p>
+                </div>
+                <button
+                  className="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow inline-flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setCashError("");
+                    setCashModalOpen(true);
+                  }}
+                >
+                  <Banknote size={20} /> Cash Received
+                </button>
+              </>
+            )}
+
+            {activeOrder.order.isPaid && (
+              <p className="mt-4 text-sm text-green-700 flex items-center gap-2">
+                <CheckCircle size={16} />
+                {activeOrder.order.paymentConfirmationMethod === "cash" &&
+                activeOrder.order.paymentReceivedByRole === "deliveryBoy"
+                  ? "Cash received"
+                  : activeOrder.order.paymentMethod === "online"
+                    ? "Paid online. Nothing to collect."
+                    : `Paid (${PAYMENT_METHOD_LABELS[activeOrder.order.paymentConfirmationMethod as keyof typeof PAYMENT_METHOD_LABELS] ?? "confirmed"}, by ${ROLE_LABELS[activeOrder.order.paymentReceivedByRole as keyof typeof ROLE_LABELS] ?? "admin"}). Nothing to collect.`}
+                {activeOrder.order.paidAt && (
+                  <span className="text-gray-500">· {formatPaidAt(activeOrder.order.paidAt)}</span>
+                )}
+              </p>
+            )}
+            {cashError && !cashModalOpen && (
+              <p role="alert" className="text-red-600 text-sm mt-3">
+                {cashError}
+              </p>
+            )}
+          </div>
+
+          {cashModalOpen && (
+            <ConfirmCashModal
+              amount={activeOrder.order.totalAmount}
+              saving={cashSaving}
+              error={cashError}
+              onCancel={() => setCashModalOpen(false)}
+              onConfirm={handleCashReceived}
+            />
+          )}
+
           {actionError && (
             <p role="alert" className="text-red-600 text-sm mt-4">
               {actionError}
+            </p>
+          )}
+          {activeOrder.order.paymentMethod === "cod" && !activeOrder.order.isPaid && (
+            <p className="text-xs text-amber-700 mt-4">
+              Payment is still pending. Confirm the cash above when you receive it.
             </p>
           )}
           <button
@@ -210,6 +357,17 @@ return ()=>socket.off("update-deliveryBoy-location")
           </p>
         )}
 
+        {loading && (
+          <div className="p-5 bg-white rounded-xl shadow border text-gray-500 animate-pulse">
+            Loading jobs...
+          </div>
+        )}
+        {!loading && assignments.length === 0 && (
+          <div className="p-8 bg-white rounded-xl shadow border text-center text-gray-500">
+            No delivery jobs right now. New jobs appear here automatically when
+            the admin sends an order out for delivery.
+          </div>
+        )}
         {assignments.map((a) => (
           <div
             key={a._id}

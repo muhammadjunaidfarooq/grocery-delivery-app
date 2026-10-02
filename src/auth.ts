@@ -20,7 +20,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error("Please provide both email and password");
         }
 
-        const email = credentials.email;
+        const email = String(credentials.email).trim().toLowerCase();
         const password = credentials.password as string;
 
         // 2. Find user and include password (since we set select: false in the model)

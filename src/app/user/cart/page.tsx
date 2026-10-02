@@ -59,9 +59,9 @@ const CartPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-5">
             <AnimatePresence>
-              {cartData.map((item, index) => (
+              {cartData.map((item) => (
                 <motion.div
-                  key={index}
+                  key={item._id}
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
@@ -89,6 +89,7 @@ const CartPage = () => {
                   </div>
                   <div className="flex items-center justify-center sm:justify-end gap-3 mt-3 sm:mt-0 bg-gray-50 px-3 py-2 rounded-full">
                     <button
+                      aria-label="Decrease quantity"
                       className="bg-white p-1.5 rounded-full hover:bg-green-100 transition-all border border-gray-200"
                       onClick={() => dispatch(decreseQuantity(item._id))}
                     >
@@ -98,6 +99,7 @@ const CartPage = () => {
                       {item.quantity}
                     </span>
                     <button
+                      aria-label="Increase quantity"
                       className="bg-white p-1.5 rounded-full hover:bg-green-100 transition-all border border-gray-200"
                       onClick={() => dispatch(increaseQuantity(item._id))}
                     >
@@ -105,6 +107,7 @@ const CartPage = () => {
                     </button>
                   </div>
                   <button
+                    aria-label="Remove item"
                     className="sm:ml-4 mt-3 sm:mt-0 text-red-500 hover:text-red-700 transition-all"
                     onClick={() => dispatch(removeFromCart(item._id))}
                   >
@@ -131,7 +134,7 @@ const CartPage = () => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span>Delivery Fee</span>
+                <span>Delivery Fee{deliveryFee === 0 ? " (free over Rs.3500)" : ""}</span>
                 <span className="text-green-700 font-semibold">
                   Rs.{deliveryFee}
                 </span>

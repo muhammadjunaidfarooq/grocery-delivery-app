@@ -2,7 +2,7 @@
 import axios from "axios";
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import AdminOrderCard from "@/components/AdminOrderCard";
 import { getSocket } from "@/lib/socket";
@@ -44,26 +44,41 @@ interface IOrder {
 
 const ManageOrders = () => {
   const [orders, setOrders] = useState<IOrder[]>();
+  const [error, setError] = useState("");
   const router = useRouter();
-  useEffect(() => {
-    const getOrders = async () => {
-      try {
-        const result = await axios.get("/api/admin/get-orders");
-        setOrders(result.data);
-      } catch (error) {
-        console.log(error);
-      }
-    };
-    getOrders();
+
+  const getOrders = useCallback(async () => {
+    try {
+      const result = await axios.get("/api/admin/get-orders");
+      setOrders(result.data);
+      setError("");
+    } catch (error) {
+      console.error(error);
+      setError("Could not load orders. Please refresh the page.");
+    }
   }, []);
 
-  useEffect((): any => {
+  useEffect(() => {
+    getOrders();
+  }, [getOrders]);
+
+  // Realtime: new orders appear at the top; rider accept / delivered updates
+  // reload the list so the assigned rider and status are always current.
+  useEffect(() => {
     const socket = getSocket();
-    socket?.on("new-order", (newOrder) => {
-      setOrders((prev) => [newOrder, ...prev!]);
-    });
-    return () => socket.off("new-order");
-  }, []);
+    const onNewOrder = (newOrder: IOrder) => {
+      setOrders((prev = []) => [
+        newOrder,
+        ...prev.filter((o) => String(o._id) !== String(newOrder._id)),
+      ]);
+    };
+    socket.on("new-order", onNewOrder);
+    socket.on("order-status-update", getOrders);
+    return () => {
+      socket.off("new-order", onNewOrder);
+      socket.off("order-status-update", getOrders);
+    };
+  }, [getOrders]);
 
   return (
     <div className="bg-linear-to-b from-white to-gray-100 min-h-screen w-full">
@@ -80,9 +95,23 @@ const ManageOrders = () => {
       </div>
       <div className="max-w-6xl mx-auto px-4 pt-24 pb-16 space-y-8">
         <div className="space-y-6">
+          {error && (
+            <div role="alert" className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-5 text-center">
+              {error}
+            </div>
+          )}
+          {!orders && !error &&
+            [1, 2].map((i) => (
+              <div key={i} className="h-48 bg-white rounded-2xl shadow-md animate-pulse" />
+            ))}
+          {orders?.length === 0 && (
+            <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-10 text-center text-gray-500">
+              No orders yet. New orders will appear here instantly.
+            </div>
+          )}
           {orders?.map((order, index) => (
-            <motion.div key={index}>
-              <AdminOrderCard key={index} order={order} />
+            <motion.div key={order._id?.toString() ?? index}>
+              <AdminOrderCard order={order} />
             </motion.div>
           ))}
         </div>

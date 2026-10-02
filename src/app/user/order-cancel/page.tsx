@@ -47,8 +47,8 @@ function OrderCancel() {
         transition={{ delay: 0.6 }}
         className="text-gray-600 mt-3 text-sm md:text-base max-w-md text-center"
       >
-        Your payment was not completed. Don’t worry — no charges were made. You
-        can try again or continue shopping.
+        Your payment was not completed. Don’t worry — no charges were made. Your
+        cart is still saved, so you can try again or continue shopping.
       </motion.p>
       <motion.div
         initial={{ y: 40, opacity: 0 }}
@@ -68,7 +68,7 @@ function OrderCancel() {
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, delay: 0.8 }}
-        className="mt-12 flex items-center justify-between gap-4"
+        className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4"
       >
         {/* Continue Shopping */}
         <motion.button
@@ -87,7 +87,7 @@ function OrderCancel() {
             whileTap={{ scale: 0.94 }}
             className="flex items-center gap-2 bg-linear-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-semibold px-8 py-3 rounded-full shadow-lg shadow-red-200"
           >
-            Retry Payment <RefreshCcw className="w-4 h-4" />
+            Back to Checkout <RefreshCcw className="w-4 h-4" />
           </motion.div>
         </Link>
       </motion.div>

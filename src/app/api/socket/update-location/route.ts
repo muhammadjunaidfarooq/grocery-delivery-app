@@ -1,6 +1,7 @@
 import connectDb from "@/lib/mongodb";
 import { requireSessionOrSocketSecret } from "@/lib/socketAuth";
 import User from "@/models/user.model";
+import mongoose from "mongoose";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -21,8 +22,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const user = await User.findByIdAndUpdate(userId, { location });
-    if (!user) {
+    const [lng, lat] = location?.coordinates ?? [];
+    if (
+      !mongoose.isValidObjectId(userId) ||
+      location?.type !== "Point" ||
+      !Number.isFinite(lng) ||
+      !Number.isFinite(lat)
+    ) {
+      return NextResponse.json({ message: "invalid location" }, { status: 400 });
+    }
+    const result = await User.updateOne(
+      { _id: userId },
+      { location: { type: "Point", coordinates: [lng, lat] } },
+    );
+    if (result.matchedCount === 0) {
       return NextResponse.json({ message: "user not found" }, { status: 400 });
     }
 

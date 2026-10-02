@@ -1,6 +1,14 @@
 "use client";
 
-import LiveMap from "@/components/LiveMap";
+import dynamic from "next/dynamic";
+
+// Leaflet needs `window`, so the map is loaded in the browser only
+const LiveMap = dynamic(() => import("@/components/LiveMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-125 rounded-xl bg-gray-100 animate-pulse" />
+  ),
+});
 import { getSocket } from "@/lib/socket";
 import { IMessage } from "@/models/message.model";
 import { IUser } from "@/models/user.model";
@@ -67,10 +75,10 @@ const TrackOrder = () => {
     latitude: 0,
     longitude: 0,
   });
-  const [deliveryBoyLocation, setDeliveryBoyLocation] = useState<ILocation>({
-    latitude: 0,
-    longitude: 0,
-  });
+  // null until the rider's position is known
+  const [deliveryBoyLocation, setDeliveryBoyLocation] =
+    useState<ILocation | null>(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     const getOrder = async () => {
@@ -84,14 +92,20 @@ const TrackOrder = () => {
         // No rider yet (the order is still pending), so there is no location
         const riderCoordinates =
           result.data.assignedDeliveryBoy?.location?.coordinates;
-        if (riderCoordinates) {
+        // [0, 0] is the default before the rider has shared a location
+        if (riderCoordinates && (riderCoordinates[0] || riderCoordinates[1])) {
           setDeliveryBoyLocation({
             latitude: riderCoordinates[1],
             longitude: riderCoordinates[0],
           });
         }
       } catch (error) {
-        console.log(error);
+        console.error(error);
+        setLoadError(
+          axios.isAxiosError(error) && error.response?.status === 404
+            ? "Order not found."
+            : "Could not load this order. Please try again.",
+        );
       }
     };
 
@@ -110,33 +124,47 @@ const TrackOrder = () => {
     };
   }, [userData?._id]);
 
-  useEffect((): any => {
+  // Live rider position: only follow the rider assigned to THIS order
+  const riderId = order?.assignedDeliveryBoy?._id?.toString();
+  useEffect(() => {
+    if (!riderId) return;
     const socket = getSocket();
-    socket.on("update-deliveryBoy-location", (data) => {
-      console.log(location);
+    const onLocation = (data: {
+      userId: string;
+      location: { coordinates: [number, number] };
+    }) => {
+      if (String(data.userId) !== riderId) return;
       setDeliveryBoyLocation({
-        latitude: data.location.coordinates?.[1] ?? data.location.latitude,
-        longitude: data.location.coordinates?.[0] ?? data.location.longitude,
+        latitude: data.location.coordinates[1],
+        longitude: data.location.coordinates[0],
       });
-    });
-
-    return () => socket.off("update-deliveryBoy-location");
-  }, [order]);
+    };
+    socket.on("update-deliveryBoy-location", onLocation);
+    return () => {
+      socket.off("update-deliveryBoy-location", onLocation);
+    };
+  }, [riderId]);
 
   useEffect(() => {
     const socket = getSocket();
-    socket.emit("join-room", orderId);
-    socket.on("send-message", (message) => {
-      if (message.roomId === orderId) {
-        setMessages((prev) => [...prev!, message]);
+    const joinRoom = () => socket.emit("join-room", orderId);
+    joinRoom();
+    // Rejoin the chat room after a reconnect
+    socket.on("connect", joinRoom);
+    const onMessage = (message: IMessage) => {
+      if (String(message.roomId) === String(orderId)) {
+        setMessages((prev) => [...prev, message]);
       }
-    });
-    return ()=>{
-  socket.off("send-message")
-}
-  }, []);
+    };
+    socket.on("send-message", onMessage);
+    return () => {
+      socket.off("connect", joinRoom);
+      socket.off("send-message", onMessage);
+    };
+  }, [orderId]);
 
   const sendMsg = () => {
+    if (!newMessage.trim()) return;
     const socket = getSocket();
 
     const message = {
@@ -159,7 +187,6 @@ const TrackOrder = () => {
         const result = await axios.post("/api/chat/messages", {
           roomId: orderId,
         });
-        console.log(result);
         setMessages(result.data);
       } catch (error) {
         console.log(error);
@@ -178,7 +205,7 @@ const TrackOrder = () => {
   return (
     <div className="w-full min-h-screen bg-linear-to-b from-green-50 to-white">
       <div className="max-w-2xl mx-auto pb-24">
-        <div className="sticky top-0 bg-white/80 backdrop-blur-xl p-4 border-b shadow flex gap-3 items-center z-999">
+        <div className="sticky top-0 bg-white/80 backdrop-blur-xl p-4 border-b shadow flex gap-3 items-center z-1000">
           <button
             className="p-2 bg-green-100 rounded-full"
             onClick={() => router.back()}
@@ -192,11 +219,30 @@ const TrackOrder = () => {
               <span className="text-green-700 font-semibold capitalize">
                 {order?.status}
               </span>
+              {order && (
+                <span
+                  className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full border ${
+                    order.isPaid
+                      ? "bg-green-100 text-green-700 border-green-300"
+                      : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                  }`}
+                >
+                  {order.isPaid ? "Paid" : "Payment Pending"}
+                </span>
+              )}
             </p>
           </div>
         </div>
         <div className="px-4 mt-6">
-          {order?.status === "delivered" ? (
+          {loadError ? (
+            <div className="bg-white rounded-3xl shadow border p-8 text-center text-red-600">
+              {loadError}
+            </div>
+          ) : !order ? (
+            <div className="bg-white rounded-3xl shadow border p-8 text-center text-gray-500 animate-pulse">
+              Loading order...
+            </div>
+          ) : order?.status === "delivered" ? (
             <div className="bg-white rounded-3xl shadow-lg border p-8 text-center">
               <CheckCircle className="mx-auto text-green-600 w-16 h-16" />
               <h3 className="text-xl font-bold text-green-700 mt-4">
@@ -209,7 +255,12 @@ const TrackOrder = () => {
             </div>
           ) : (
             <>
-              <div className="rounded-3xl overflow-hidden border shadow">
+              {!deliveryBoyLocation && (
+                <p className="text-sm text-gray-600 mb-2">
+                  Waiting for the rider&apos;s live location...
+                </p>
+              )}
+              <div className="rounded-3xl overflow-hidden border shadow mb-6">
                 <LiveMap
                   userLocation={userLocation}
                   deliveryBoyLocation={deliveryBoyLocation}
@@ -221,17 +272,17 @@ const TrackOrder = () => {
                   <AnimatePresence>
                     {messages?.map((msg, index) => (
                       <motion.div
-                        key={msg._id?.toString()}
+                        key={msg._id?.toString() ?? index}
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className={`flex ${msg.senderId == userData?._id ? "justify-end" : "justify-start"}`}
+                        className={`flex ${String(msg.senderId) === String(userData?._id) ? "justify-end" : "justify-start"}`}
                       >
                         <div
                           className={`px-4 py-2 max-w-[75%] rounded-2xl shadow
         ${
-          msg.senderId === userData?._id
+          String(msg.senderId) === String(userData?._id)
             ? "bg-green-600 text-white rounded-br-none"
             : "bg-gray-100 text-gray-800 rounded-bl-none"
         }`}
@@ -253,6 +304,9 @@ const TrackOrder = () => {
                     className="flex-1 bg-gray-100 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-green-500"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") sendMsg();
+                    }}
                   />
                   <button
                     className="bg-green-600 hover:bg-green-700 p-3 rounded-xl text-white"
