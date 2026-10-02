@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect } from "react";
 import L, { LatLngExpression } from "leaflet";
 import {

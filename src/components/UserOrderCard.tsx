@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
 import {
   ChevronDown,
@@ -11,8 +11,13 @@ import {
   UserCheck,
 } from "lucide-react";
 import Image from "next/image";
-import { getSocket } from "@/lib/socket";
 import { displayMobile } from "@/lib/mobile";
+import {
+  customerPaymentMethodLabel,
+  formatPaidAt,
+  type PaymentConfirmationMethod,
+  type PaymentReceivedByRole,
+} from "@/lib/payment";
 import mongoose from "mongoose";
 import { IUser } from "@/models/user.model";
 import { useRouter } from "next/navigation";
@@ -29,6 +34,9 @@ interface IOrder {
     quantity: number;
   }[];
   isPaid: boolean;
+  paidAt?: string | Date | null;
+  paymentConfirmationMethod?: PaymentConfirmationMethod | null;
+  paymentReceivedByRole?: PaymentReceivedByRole | null;
   totalAmount: {
     type: number;
   };
@@ -52,7 +60,8 @@ interface IOrder {
 
 const UserOrderCard = ({ order }: { order: IOrder }) => {
   const [expended, setExpended] = useState(false);
-  const [status, setStatus] = useState(order.status);
+  // my-orders reloads the list on every realtime status update
+  const status = order.status;
   const router = useRouter();
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -67,15 +76,7 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
     }
   };
 
-  useEffect((): any => {
-    const socket = getSocket();
-    socket.on("order-status-update", (data) => {
-      if (data.orderId.toString() == order._id!.toString()) {
-        setStatus(data.status);
-      }
-    });
-    return () => socket.off("order-status-update");
-  }, []);
+
 
   return (
     <motion.div
@@ -104,7 +105,7 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
                 : "bg-red-100 text-red-700 border-red-300"
             }`}
           >
-            {order.isPaid ? "Paid" : "Unpaid"}
+            {order.isPaid ? "Paid" : "Payment Pending"}
           </span>
           <span
             className={`px-3 py-1 text-xs font-semibold border rounded-full capitalize ${getStatusColor(
@@ -117,17 +118,25 @@ const UserOrderCard = ({ order }: { order: IOrder }) => {
       </div>
 
       <div className="p-5 space-y-4">
-        {order.paymentMethod == "cod" ? (
-          <div className="flex items-center gap-2 text-gray-700 text-sm">
-            <Truck size={16} className="text-green-600" />
-            Cash On Delivery
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-gray-700 text-sm">
-            <CreditCard size={16} className="text-green-600" />
-            Online Payment
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-gray-700 text-sm">
+          <span className="flex items-center gap-2">
+            {order.paymentMethod == "cod" ? (
+              <Truck size={16} className="text-green-600" />
+            ) : (
+              <CreditCard size={16} className="text-green-600" />
+            )}
+            Payment Method: <b>{customerPaymentMethodLabel(order)}</b>
+          </span>
+          <span>
+            Payment Status:{" "}
+            <b className={order.isPaid ? "text-green-700" : "text-yellow-700"}>
+              {order.isPaid ? "Paid" : "Payment Pending"}
+            </b>
+            {order.isPaid && order.paidAt && (
+              <span className="text-gray-500 text-xs"> · {formatPaidAt(order.paidAt)}</span>
+            )}
+          </span>
+        </div>
 
         {order.assignedDeliveryBoy && (
           <>

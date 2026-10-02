@@ -17,9 +17,11 @@ import {
   CreditCard,
   CreditCardIcon,
   Truck,
+  ShoppingBasket,
 } from "lucide-react";
-import { useSelector } from "react-redux";
-import { RootState } from "@/redux/store";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/redux/store";
+import { clearCart } from "@/redux/cartSlice";
 import axios from "axios";
 
 // Leaflet needs `window`, so the map is loaded in the browser only
@@ -27,8 +29,13 @@ const CheckoutMap = dynamic(() => import("@/components/CheckoutMap"), {
   ssr: false,
 });
 
+// Used when the browser cannot give us a location (blocked or unavailable):
+// the map still shows, and the customer can search or drag the pin.
+const DEFAULT_POSITION: [number, number] = [31.5204, 74.3587]; // Lahore
+
 const Checkout = () => {
   const router = useRouter();
+  const dispatch = useDispatch<AppDispatch>();
   const { userData } = useSelector((state: RootState) => state.user);
   const { subTotal, deliveryFee, finalTotal, cartData } = useSelector(
     (state: RootState) => state.cart,
@@ -45,35 +52,48 @@ const Checkout = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "online">("cod");
+  const [placing, setPlacing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [locationNote, setLocationNote] = useState("");
 
   const [position, setPosition] = useState<[number, number] | null>(null);
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setPosition([latitude, longitude]);
-        },
-        (err) => {
-          console.log("location error ", err);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
-      );
+
+  const locate = () => {
+    if (!navigator.geolocation) {
+      setPosition((prev) => prev ?? DEFAULT_POSITION);
+      setLocationNote("Location is not available. Search your area or drag the pin.");
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocationNote("");
+        setPosition([pos.coords.latitude, pos.coords.longitude]);
+      },
+      () => {
+        setPosition((prev) => prev ?? DEFAULT_POSITION);
+        setLocationNote("Location access was blocked. Search your area or drag the pin.");
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
+    );
+  };
+
+  useEffect(() => {
+    locate();
   }, []);
 
   useEffect(() => {
     if (userData) {
       setAddress((prev) => ({
         ...prev,
-        fullName: userData.name || "",
-        mobile: userData.mobile || "",
+        fullName: prev.fullName || userData.name || "",
+        mobile: prev.mobile || userData.mobile || "",
       }));
     }
   }, [userData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    setErrorMessage("");
     setAddress((prev) => ({
       ...prev,
       [name]: value, // This updates the specific field based on the 'name' attribute
@@ -81,17 +101,25 @@ const Checkout = () => {
   };
 
   const handleSearchQuery = async () => {
+    if (!searchQuery.trim()) return;
     setSearchLoading(true);
-    // leaflet-geosearch pulls in Leaflet (needs `window`), so load it on demand
-    const { OpenStreetMapProvider } = await import("leaflet-geosearch");
-    const provider = new OpenStreetMapProvider();
-    const results = await provider.search({ query: searchQuery });
-    if (results && results.length > 0) {
-      setPosition([results[0].y, results[0].x]);
-    } else {
-      console.log("No location found");
+    try {
+      // leaflet-geosearch pulls in Leaflet (needs `window`), so load it on demand
+      const { OpenStreetMapProvider } = await import("leaflet-geosearch");
+      const provider = new OpenStreetMapProvider();
+      const results = await provider.search({ query: searchQuery });
+      if (results && results.length > 0) {
+        setLocationNote("");
+        setPosition([results[0].y, results[0].x]);
+      } else {
+        setLocationNote("No place found for that search.");
+      }
+    } catch (error) {
+      console.error(error);
+      setLocationNote("Search is not available right now. Drag the pin instead.");
+    } finally {
+      setSearchLoading(false);
     }
-    setSearchLoading(false);
   };
 
   useEffect(() => {
@@ -107,100 +135,79 @@ const Checkout = () => {
             result.data.address.city ||
             result.data.address.town ||
             result.data.address.village ||
-            "",
-          state: result.data.address.state || "",
-          pincode: result.data.address?.postcode || "",
-          fullAddress: result.data.display_name || "",
+            prev.city,
+          state: result.data.address.state || prev.state,
+          pincode: result.data.address?.postcode || prev.pincode,
+          fullAddress: result.data.display_name || prev.fullAddress,
         }));
       } catch (error) {
-        console.log("ERROR: ", error);
+        // Reverse geocoding is a convenience; the customer can type the address
+        console.error("Reverse geocoding failed", error);
       }
     };
     fetchAddress();
   }, [position]);
 
-  const handleCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setPosition([latitude, longitude]);
-        },
-        (err) => {
-          console.log("location error ", err);
-        },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
+  // Same checks the server does, so the customer sees the problem at once
+  const validate = () => {
+    if (cartData.length === 0) return "Your cart is empty";
+    if (!address.fullName.trim()) return "Please enter your full name";
+    const digits = address.mobile.replace(/\D/g, "").replace(/^(92|0)/, "");
+    if (!/^3\d{9}$/.test(digits)) return "Please enter a valid mobile number (e.g. 3001234567)";
+    if (!address.fullAddress.trim()) return "Please enter your delivery address";
+    if (!address.city.trim()) return "Please enter your city";
+    if (!position) return "Please choose your location on the map";
+    return "";
+  };
+
+  const placeOrder = async () => {
+    const problem = validate();
+    if (problem) {
+      setErrorMessage(problem);
+      return;
+    }
+    setPlacing(true);
+    setErrorMessage("");
+    // Only ids and quantities are sent: the server looks up the prices
+    const body = {
+      items: cartData.map((item) => ({ grocery: item._id, quantity: item.quantity })),
+      address: { ...address, latitude: position![0], longitude: position![1] },
+    };
+    try {
+      if (paymentMethod === "cod") {
+        await axios.post("/api/user/order", body);
+        dispatch(clearCart());
+        router.push("/user/order-success");
+      } else {
+        const result = await axios.post("/api/user/payment", body);
+        // The cart is cleared on the success page, after Stripe returns
+        window.location.href = result.data.url;
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(
+        axios.isAxiosError(error) && error.response?.data?.message
+          ? error.response.data.message
+          : "Could not place your order. Please check your connection and try again.",
       );
+      setPlacing(false);
     }
   };
 
-  const handleCod = async () => {
-    if (!position) {
-      return null;
-    }
-    try {
-      const result = await axios.post("/api/user/order", {
-        userId: userData?._id,
-        items: cartData.map((item) => ({
-          grocery: item._id,
-          name: item.name,
-          price: item.price,
-          unit: item.unit,
-          quantity: item.quantity,
-          image: item.image,
-        })),
-        totalAmount: finalTotal,
-        address: {
-          fullName: address.fullName,
-          mobile: address.mobile,
-          city: address.city,
-          state: address.state,
-          fullAddress: address.fullAddress,
-          pincode: address.pincode,
-          latitude: position[0],
-          longitude: position[1],
-        },
-        paymentMethod,
-      });
-      router.push("/user/order-success");
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-  const handleOnlinePayment = async () => {
-    if (!position) {
-      return null;
-    }
-    try {
-      const result = await axios.post("/api/user/payment", {
-        userId: userData?._id,
-        items: cartData.map((item) => ({
-          grocery: item._id,
-          name: item.name,
-          price: item.price,
-          unit: item.unit,
-          quantity: item.quantity,
-          image: item.image,
-        })),
-        totalAmount: finalTotal,
-        address: {
-          fullName: address.fullName,
-          mobile: address.mobile,
-          city: address.city,
-          state: address.state,
-          fullAddress: address.fullAddress,
-          pincode: address.pincode,
-          latitude: position[0],
-          longitude: position[1],
-        },
-        paymentMethod,
-      });
-      window.location.href = result.data.url;
-    } catch (error) {
-      console.log(error);
-    }
-  };
+  if (cartData.length === 0 && !placing) {
+    return (
+      <div className="w-[92%] md:w-[80%] mx-auto py-24 text-center">
+        <ShoppingBasket className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <p className="text-gray-600 text-lg mb-6">Your cart is empty.</p>
+        <button
+          onClick={() => router.push("/")}
+          className="bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-all font-medium"
+        >
+          Continue Shopping
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-[92%] md:w-[80%] mx-auto py-10 relative">
@@ -240,6 +247,7 @@ const Checkout = () => {
               <input
                 type="text"
                 value={address.fullName}
+                placeholder="Full Name"
                 name="fullName"
                 onChange={handleChange}
                 className="pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50"
@@ -253,6 +261,8 @@ const Checkout = () => {
               <input
                 type="text"
                 value={address.mobile}
+                placeholder="Mobile (e.g. 3001234567)"
+                inputMode="tel"
                 name="mobile"
                 onChange={handleChange}
                 className="pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50"
@@ -272,7 +282,7 @@ const Checkout = () => {
                 className="pl-10 w-full border rounded-lg p-3 text-sm bg-gray-50"
               />
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="relative">
                 <Building
                   className="absolute left-3 top-3 text-green-600"
@@ -330,6 +340,8 @@ const Checkout = () => {
                 }}
               />
               <button
+                type="button"
+                disabled={searchLoading}
                 className="bg-green-600 text-white px-5 rounded-lg hover:bg-green-700 transition-all font-medium"
                 onClick={handleSearchQuery}
               >
@@ -340,6 +352,9 @@ const Checkout = () => {
                 )}
               </button>
             </div>
+            {locationNote && (
+              <p className="text-amber-700 text-sm">{locationNote}</p>
+            )}
             <div className="relative mt-6 h-82.5 rounded-xl overflow-hidden border border-gray-200 shadow-inner">
               {position && (
                 <CheckoutMap
@@ -350,7 +365,8 @@ const Checkout = () => {
               <motion.button
                 whileTap={{ scale: 0.93 }}
                 className="absolute bottom-4 right-4 bg-green-600 text-white shadow-lg rounded-full p-3 hover:bg-green-700 transition-all flex items-center justify-center z-999"
-                onClick={handleCurrentLocation}
+                onClick={locate}
+                aria-label="Use my current location"
               >
                 <LocateFixed size={22} />
               </motion.button>
@@ -420,18 +436,23 @@ const Checkout = () => {
               </span>
             </div>
           </div>
+          {errorMessage && (
+            <p role="alert" className="mt-4 text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg p-3">
+              {errorMessage}
+            </p>
+          )}
           <motion.button
             whileTap={{ scale: 0.93 }}
-            className="w-full mt-6 bg-green-600 text-white py-3 rounded-full hover:bg-green-700 transition-all font-semibold"
-            onClick={() => {
-              if (paymentMethod === "cod") {
-                handleCod();
-              } else {
-                handleOnlinePayment();
-              }
-            }}
+            disabled={placing}
+            className="w-full mt-6 bg-green-600 text-white py-3 rounded-full hover:bg-green-700 transition-all font-semibold disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            onClick={placeOrder}
           >
-            {paymentMethod === "cod" ? "Place Order" : "Pay & Place Order"}
+            {placing && <Loader2 className="animate-spin" size={18} />}
+            {placing
+              ? "Placing order..."
+              : paymentMethod === "cod"
+                ? "Place Order"
+                : "Pay & Place Order"}
           </motion.button>
         </motion.div>
       </div>

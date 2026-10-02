@@ -17,6 +17,14 @@ import axios from "axios";
 import mongoose from "mongoose";
 import { IUser } from "@/models/user.model";
 import { displayMobile } from "@/lib/mobile";
+import PaymentReceivedModal from "./PaymentReceivedModal";
+import {
+  PAYMENT_METHOD_LABELS,
+  ROLE_LABELS,
+  formatPaidAt,
+  type PaymentConfirmationMethod,
+  type PaymentReceivedByRole,
+} from "@/lib/payment";
 
 interface IOrder {
   _id?: mongoose.Types.ObjectId;
@@ -30,6 +38,11 @@ interface IOrder {
     quantity: number;
   }[];
   isPaid: boolean;
+  paidAt?: string | Date | null;
+  paymentConfirmationMethod?: PaymentConfirmationMethod | null;
+  paymentReceivedByRole?: PaymentReceivedByRole | null;
+  paymentReceivedBy?: { name?: string } | string | null;
+  paymentConfirmationNote?: string;
   totalAmount: {
     type: number;
   };
@@ -56,19 +69,47 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
   const [expended, setExpended] = useState(false);
 
   const [status, setStatus] = useState<string>("pending");
+  const [updating, setUpdating] = useState(false);
+  const [notice, setNotice] = useState<{ type: "info" | "error"; text: string } | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  // Shown at once after the admin confirms; the list also reloads via socket
+  const [confirmedPayment, setConfirmedPayment] = useState<Partial<IOrder> | null>(null);
+  const pay = { ...order, ...confirmedPayment };
+  const receivedByName =
+    pay.paymentReceivedBy && typeof pay.paymentReceivedBy === "object"
+      ? pay.paymentReceivedBy.name
+      : undefined;
 
-  const updateStatus = async (orderId: string, status: string) => {
+  const updateStatus = async (orderId: string, nextStatus: string) => {
+    setUpdating(true);
+    setNotice(null);
     try {
       const result = await axios.post(
         `/api/admin/update-order-status/${orderId}`,
-        {
-          status,
-        },
+        { status: nextStatus },
       );
-      console.log(result.data);
-      setStatus(status);
+      setStatus(nextStatus);
+      if (nextStatus === "out of delivery") {
+        const riders = result.data?.availableBoys?.length ?? 0;
+        setNotice(
+          riders > 0
+            ? { type: "info", text: `Job sent to ${riders} nearby rider${riders > 1 ? "s" : ""}. Waiting for one to accept.` }
+            : result.data?.assignment
+              ? { type: "info", text: "Already sent to riders." }
+              : { type: "error", text: "No free rider within 10 km right now. Try again later." },
+        );
+      }
     } catch (error) {
-      console.log(error);
+      console.error(error);
+      setNotice({
+        type: "error",
+        text:
+          axios.isAxiosError(error) && error.response?.data?.message
+            ? error.response.data.message
+            : "Could not update the status. Please try again.",
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -93,34 +134,79 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
           <span
             className={`inline-block text-xs font-semibold px-3 py-1 rounded-full border
     ${
-      order.isPaid
+      pay.isPaid
         ? "bg-green-100 text-green-700 border-green-300"
         : "bg-red-100 text-red-700 border-red-300"
     }`}
           >
-            {order.isPaid ? "Paid" : "Unpaid"}
+            {pay.isPaid ? "Paid" : "Payment Pending"}
           </span>
           <p className="text-gray-500 text-sm">
             {new Date(order.createdAt!).toLocaleString()}
           </p>
           <p className="flex items-center gap-2 font-semibold">
             <User size={16} className="text-green-600" />
-            <span>{order?.address.fullName}</span>
+            <span>{order?.address?.fullName}</span>
           </p>
           <p className="flex items-center gap-2 font-semibold">
             <Phone size={16} className="text-green-600" />
-            <span>{order?.address.mobile}</span>
+            <span>{order?.address?.mobile}</span>
           </p>
           <p className="flex items-center gap-2 font-semibold">
             <MapPin size={16} className="text-green-600" />
-            <span>{order?.address.fullAddress}</span>
+            <span>{order?.address?.fullAddress}</span>
           </p>
-          <p className="mt-3  flex items-center gap-2 text-sm text-gray-700">
-            <CreditCard size={16} className="text-green-600" />
-            <span>
-              {order?.paymentMethod === "cod" ? "Cash On Delivery" : "Online"}
-            </span>
-          </p>
+          {/* Payment */}
+          <div className="mt-3 bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-700 space-y-1 max-w-md">
+            <p className="flex items-center gap-2">
+              <CreditCard size={16} className="text-green-600" />
+              <span className="font-semibold">Payment:</span>
+              {order?.paymentMethod === "cod" ? "Cash On Delivery" : "Online (Stripe)"}
+              <span className="text-gray-400">·</span>
+              <span className={pay.isPaid ? "text-green-700 font-semibold" : "text-yellow-700 font-semibold"}>
+                {pay.isPaid ? "Paid" : "Pending"}
+              </span>
+            </p>
+            {pay.isPaid && pay.paymentConfirmationMethod && (
+              <div className="pl-6 text-xs text-gray-600 space-y-0.5">
+                <p>
+                  Method: <b>{PAYMENT_METHOD_LABELS[pay.paymentConfirmationMethod]}</b>
+                  {pay.paymentReceivedByRole === "deliveryBoy" &&
+                    pay.paymentConfirmationMethod === "cash" &&
+                    " (cash received by rider)"}
+                </p>
+                {pay.paymentReceivedByRole && (
+                  <p>
+                    Confirmed by: <b>{ROLE_LABELS[pay.paymentReceivedByRole]}</b>
+                    {receivedByName ? ` (${receivedByName})` : ""}
+                  </p>
+                )}
+                {pay.paidAt && <p>Confirmed at: {formatPaidAt(pay.paidAt)}</p>}
+                {pay.paymentConfirmationNote && (
+                  <p className="italic">Reason: {pay.paymentConfirmationNote}</p>
+                )}
+              </div>
+            )}
+            {order.paymentMethod === "cod" && !pay.isPaid && (
+              <button
+                onClick={() => setPaymentModalOpen(true)}
+                className="ml-6 mt-1 text-xs font-semibold bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition"
+              >
+                Mark Payment Received
+              </button>
+            )}
+          </div>
+          {paymentModalOpen && (
+            <PaymentReceivedModal
+              orderId={order._id!.toString()}
+              amount={Number(order.totalAmount)}
+              onClose={() => setPaymentModalOpen(false)}
+              onConfirmed={(payment) => {
+                setConfirmedPayment(payment as Partial<IOrder>);
+                setPaymentModalOpen(false);
+              }}
+            />
+          )}
 
           {order.assignedDeliveryBoy && (
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
@@ -162,6 +248,7 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
             <select
               className="border border-gray-300 rounded-lg px-3 py-1 text-sm shadow-sm hover:border-green-400 transition focus:ring-2 focus:ring-green-500 outline-none"
               value={status}
+              disabled={updating}
               onChange={(e) =>
                 updateStatus(order._id?.toString()!, e.target.value)
               }
@@ -172,6 +259,14 @@ const AdminOrderCard = ({ order }: { order: IOrder }) => {
                 </option>
               ))}
             </select>
+          )}
+          {notice && (
+            <p
+              role={notice.type === "error" ? "alert" : "status"}
+              className={`text-xs max-w-60 md:text-right ${notice.type === "error" ? "text-red-600" : "text-blue-700"}`}
+            >
+              {notice.text}
+            </p>
           )}
         </div>
       </div>

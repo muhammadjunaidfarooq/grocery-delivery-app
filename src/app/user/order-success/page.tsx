@@ -1,5 +1,7 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import { clearCart } from "@/redux/cartSlice";
 import { motion } from "motion/react";
 import { ArrowRight, CheckCircle, Package } from "lucide-react";
 import Link from "next/link";
@@ -7,10 +9,14 @@ import { useRouter } from "next/navigation";
 
 function OrderSuccess() {
   const router = useRouter();
+  const dispatch = useDispatch();
+  // The order is placed, so the cart is emptied (also after a Stripe payment)
+  useEffect(() => {
+    dispatch(clearCart());
+  }, [dispatch]);
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-[80vh] px-6 text-ce
-bg-linear-to-b from-green-50 to-white"
+      className="flex flex-col items-center justify-center min-h-[80vh] px-6 text-center bg-linear-to-b from-green-50 to-white"
     >
       <motion.div
         initial={{ scale: 0, rotate: -180 }}
@@ -52,7 +58,7 @@ bg-linear-to-b from-green-50 to-white"
       >
         Thank you for shopping with us! Your order has been placed and is being
         processed. You can track its progress in your{" "}
-        <span className="font-semiboldtext text-green-700">My Orders</span>{" "}
+        <span className="font-semibold text-green-700">My Orders</span>{" "}
         section.
       </motion.p>
       <motion.div
@@ -72,7 +78,7 @@ bg-linear-to-b from-green-50 to-white"
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, delay: 0.8 }}
-        className="mt-12 flex items-center justify-between gap-4"
+        className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4"
       >
         <motion.button
           onClick={() => router.push("/")}

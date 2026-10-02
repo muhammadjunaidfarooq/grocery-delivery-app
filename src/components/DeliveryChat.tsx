@@ -1,3 +1,4 @@
+"use client";
 import { getSocket } from "@/lib/socket";
 import { IMessage } from "@/models/message.model";
 import axios from "axios";
@@ -15,18 +16,23 @@ function DeliveryChat({ orderId, deliveryBoyId }: props) {
   const chatBoxRef=useRef<HTMLDivElement>(null)
   useEffect(() => {
     const socket = getSocket();
-    socket.emit("join-room", orderId);
-    socket.on("send-message", (message) => {
-      if (message.roomId === orderId) {
-        setMessages((prev) => [...prev!, message]);
+    const joinRoom = () => socket.emit("join-room", orderId);
+    joinRoom();
+    socket.on("connect", joinRoom); // rejoin after a reconnect
+    const onMessage = (message: IMessage) => {
+      if (String(message.roomId) === String(orderId)) {
+        setMessages((prev) => [...prev, message]);
       }
-    });
-    return () => {
-      socket.off("send-message");
     };
-  }, []);
+    socket.on("send-message", onMessage);
+    return () => {
+      socket.off("connect", joinRoom);
+      socket.off("send-message", onMessage);
+    };
+  }, [orderId]);
 
   const sendMsg = () => {
+    if (!newMessage.trim()) return;
     const socket = getSocket();
 
     const message = {
@@ -49,7 +55,6 @@ function DeliveryChat({ orderId, deliveryBoyId }: props) {
         const result = await axios.post("/api/chat/messages", {
           roomId: orderId,
         });
-        console.log(result);
         setMessages(result.data);
       } catch (error) {
         console.log(error);
@@ -76,12 +81,12 @@ function DeliveryChat({ orderId, deliveryBoyId }: props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className={`flex ${msg.senderId == deliveryBoyId ? "justify-end" : "justify-start"}`}
+              className={`flex ${String(msg.senderId) === String(deliveryBoyId) ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`px-4 py-2 max-w-[75%] rounded-2xl shadow
     ${
-      msg.senderId === deliveryBoyId
+      String(msg.senderId) === String(deliveryBoyId)
         ? "bg-green-600 text-white rounded-br-none"
         : "bg-gray-100 text-gray-800 rounded-bl-none"
     }`}
@@ -103,6 +108,9 @@ function DeliveryChat({ orderId, deliveryBoyId }: props) {
           className="flex-1 bg-gray-100 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-green-500"
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") sendMsg();
+          }}
         />
         <button
           className="bg-green-600 hover:bg-green-700 p-3 rounded-xl text-white"

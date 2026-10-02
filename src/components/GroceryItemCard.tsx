@@ -1,5 +1,4 @@
 "use client";
-import mongoose from "mongoose";
 import React from "react";
 import { motion } from "motion/react";
 import Image from "next/image";
@@ -8,8 +7,8 @@ import { useDispatch, useSelector } from "react-redux";
 import { AppDispatch, RootState } from "@/redux/store";
 import { addToCart, decreseQuantity, increaseQuantity } from "@/redux/cartSlice";
 
-interface IGrocery {
-  _id: mongoose.Types.ObjectId;
+export interface GroceryCardItem {
+  _id: string;
   name: string;
   category: string;
   price: string;
@@ -17,14 +16,14 @@ interface IGrocery {
   image: string;
   // Missing on older products: treat a missing value as in stock
   inStock?: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-const GroceryItemCard = ({ item }: { item: IGrocery }) => {
+const GroceryItemCard = ({ item }: { item: GroceryCardItem }) => {
   const dispatch = useDispatch<AppDispatch>();
   const { cartData } = useSelector((state: RootState) => state.cart);
-  const cartItem = cartData.find((i) => i._id == item._id);
+  const cartItem = cartData.find((i) => i._id === item._id);
   const outOfStock = item.inStock === false;
   return (
     <motion.div
@@ -56,7 +55,7 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
         <p className="text-xs text-gray-500 font-medium mb-1">
           {item.category}
         </p>
-        <h3>{item.name}</h3>
+        <h3 className="font-semibold text-gray-800 line-clamp-2">{item.name}</h3>
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
             {item.unit}
@@ -76,9 +75,21 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
           <motion.button
             className="mt-4 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-full py-2 text-sm font-medium transition-all"
             whileTap={{ scale: 0.96 }}
-            onClick={() => dispatch(addToCart({ ...item, quantity: 1 }))}
+            onClick={() =>
+              dispatch(
+                addToCart({
+                  _id: item._id,
+                  name: item.name,
+                  category: item.category,
+                  price: item.price,
+                  unit: item.unit,
+                  image: item.image,
+                  quantity: 1,
+                }),
+              )
+            }
           >
-            <ShoppingCart /> Add to Cart
+            <ShoppingCart className="w-4 h-4" /> Add to Cart
           </motion.button>
         ) : (
           <motion.div
@@ -87,13 +98,14 @@ const GroceryItemCard = ({ item }: { item: IGrocery }) => {
             transition={{ duration: 0.3 }}
             className="mt-4 flex items-center justify-center bg-green-50 border border-green-200 rounded-full py-2 px-4 gap-4"
           >
-            <button className="w-7 h-7 flex items-center justify-center rounded-full bg-green-100 hover:bg-green-200 transition-all" onClick={() => dispatch(decreseQuantity(item._id))}>
+            <button aria-label="Decrease quantity" className="w-7 h-7 flex items-center justify-center rounded-full bg-green-100 hover:bg-green-200 transition-all" onClick={() => dispatch(decreseQuantity(item._id))}>
               <Minus size={16} className="text-green-700" />
             </button>
             <span className="text-sm font-semibold text-gray-800">
               {cartItem.quantity}
             </span>
             <button
+              aria-label="Increase quantity"
               className="w-7 h-7 flex items-center justify-center rounded-full bg-green-100 hover:bg-green-200 transition-all"
               onClick={() => dispatch(increaseQuantity(item._id))}
             >

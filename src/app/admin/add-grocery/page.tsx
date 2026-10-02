@@ -31,6 +31,7 @@ const AddGrocery = () => {
   const [preview, setPreview] = useState<string | null>();
   const [backendImage, setBackendImage] = useState<File | null>();
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -42,7 +43,12 @@ const AddGrocery = () => {
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!name.trim() || !category || !unit || !price || !backendImage) {
+      setMessage({ type: "error", text: "Please fill in every field and choose an image." });
+      return;
+    }
     setLoading(true);
+    setMessage(null);
 
     try {
       const formData = new FormData();
@@ -64,11 +70,18 @@ const AddGrocery = () => {
         setUnit("");
         setPreview(null);
         setBackendImage(null);
-        console.log(result.data);
-        setLoading(false);
+        setMessage({ type: "success", text: `"${result.data.name}" was added.` });
       }
-    } catch (error: any) {
-      console.error("Upload Error:", error.response?.data || error.message);
+    } catch (error) {
+      console.error("Upload Error:", error);
+      setMessage({
+        type: "error",
+        text:
+          axios.isAxiosError(error) && error.response?.data?.message
+            ? error.response.data.message
+            : "Could not add the grocery. Please try again.",
+      });
+    } finally {
       setLoading(false);
     }
   };
@@ -92,7 +105,7 @@ const AddGrocery = () => {
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3">
             <PlusCircle className="text-green-600 w-8 h-8" />
-            <h1>Add Your Grocery</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-green-700">Add Your Grocery</h1>
           </div>
           <p className="text-gray-500 text-sm text-center">
             Fill out the details below to add a new grocery item.
@@ -145,7 +158,7 @@ const AddGrocery = () => {
                 value={unit}
                 className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-green-400 bg-white"
               >
-                <option value="">Select Category</option>
+                <option value="">Select Unit</option>
                 {units.map((unit) => (
                   <option value={unit} key={unit}>
                     {unit}
@@ -196,6 +209,18 @@ const AddGrocery = () => {
               />
             )}
           </div>
+          {message && (
+            <p
+              role={message.type === "error" ? "alert" : "status"}
+              className={`text-sm rounded-lg p-3 border ${
+                message.type === "error"
+                  ? "text-red-700 bg-red-50 border-red-200"
+                  : "text-green-700 bg-green-50 border-green-200"
+              }`}
+            >
+              {message.text}
+            </p>
+          )}
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.9 }}

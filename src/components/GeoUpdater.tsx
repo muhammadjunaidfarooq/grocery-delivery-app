@@ -1,29 +1,23 @@
 "use client";
 import { getSocket } from "@/lib/socket";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 
+/**
+ * Tells the socket server which user this browser belongs to, so the app can
+ * send events to this user (for example a new delivery job to a rider).
+ * It is sent again after every reconnect, because the socket id changes.
+ * (Riders share their live location from the rider dashboard.)
+ */
 const GeoUpdater = ({ userId }: { userId: string }) => {
-  let socket = getSocket();
-  socket.emit("identity", userId);
   useEffect(() => {
     if (!userId) return;
-    if (!navigator.geolocation) return;
-    const watcher = navigator.geolocation.watchPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        socket.emit("update-location", {
-          userId,
-          latitude: lat,
-          longitude: lon,
-        });
-      },
-      (err) => {
-        console.log(err);
-      },
-      { enableHighAccuracy: true },
-    );
-    return () => navigator.geolocation.clearWatch(watcher);
+    const socket = getSocket();
+    const sendIdentity = () => socket.emit("identity", userId);
+    if (socket.connected) sendIdentity();
+    socket.on("connect", sendIdentity);
+    return () => {
+      socket.off("connect", sendIdentity);
+    };
   }, [userId]);
   return null;
 };

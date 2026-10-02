@@ -47,15 +47,18 @@ function MyOrder() {
   const router = useRouter();
   const [orders, setOrders] = useState<IOrder[]>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   useEffect(() => {
     const getMyOrders = async () => {
       try {
         const result = await axios.get("/api/user/my-orders");
         setOrders(result.data);
-        console.log(result);
-        setLoading(false);
+        setError("");
       } catch (error) {
-        console.log(error);
+        console.error(error);
+        setError("Could not load your orders. Please refresh the page.");
+      } finally {
+        setLoading(false);
       }
     };
     getMyOrders();
@@ -68,9 +71,6 @@ function MyOrder() {
     };
   }, []);
 
-  if (loading) {
-    return <div className="text-center mt-10">Loading orders...</div>;
-  }
 
   return (
     <div className="bg-linear-to-b from-white to-gray-100 min-h-screen w-full">
@@ -87,7 +87,17 @@ function MyOrder() {
           </div>
         </div>
 
-        {orders?.length == 0 ? (
+        {loading ? (
+          <div className="mt-8 space-y-4">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-40 bg-white rounded-2xl shadow-md animate-pulse" />
+            ))}
+          </div>
+        ) : error ? (
+          <div role="alert" className="mt-8 bg-red-50 border border-red-200 text-red-700 rounded-2xl p-5 text-center">
+            {error}
+          </div>
+        ) : orders?.length == 0 ? (
           <div className="pt-20 flex flex-col items-center text-center">
             <PackageSearch size={70} className="text-green-600 mb-4" />
             <h2 className="text-xl font-semibold text-gray-700">
@@ -96,12 +106,18 @@ function MyOrder() {
             <p className="text-gray-500 text-sm mt-1">
               Start shopping to view your orders here.
             </p>
+            <button
+              onClick={() => router.push("/")}
+              className="mt-6 bg-green-600 text-white px-6 py-3 rounded-full hover:bg-green-700 transition-all font-medium"
+            >
+              Start Shopping
+            </button>
           </div>
         ) : (
           <div className="mt-4 space-y-6">
             {orders?.map((order, index) => (
               <motion.div
-                key={index}
+                key={order._id?.toString() ?? index}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
